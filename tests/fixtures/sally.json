@@ -10,7 +10,7 @@
     "breed": "French Poodle",
     "sex": "hembra",
     "age_months": 96,
-    "weight_kg": 9.6,
+    "weight_kg": 10.08,
     "size": "pequeño",
     "reproductive_status": "esterilizado",
     "activity_level": "sedentario",
@@ -74,7 +74,7 @@
 
   "nrc_calculation_trace": {
     "formula": "RER = 70 × peso_kg^0.75",
-    "peso_kg": 9.6,
+    "peso_kg": 10.08,
     "peso_075": 5.657,
     "rer": 396.0,
     "factors_applied": {
