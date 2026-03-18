@@ -1,0 +1,7 @@
+NutriVet.IA es asesoría nutricional digital — no reemplaza el diagnóstico médico veterinario.
+
+---
+
+REGLA: Este texto DEBE aparecer en cada vista del plan nutricional, sin excepción.
+No puede omitirse, minimizarse ni colocarse en letra ilegible.
+Ver: domain/invariants.md → INV-22

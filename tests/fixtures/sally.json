@@ -1,0 +1,88 @@
+{
+  "_comment": "Golden Case Sally — validado por Lady Carolina Castañeda (MV, BAMPYSVET). NO modificar sin validación veterinaria.",
+  "_version": "1.0",
+  "_validated_by": "Lady Carolina Castañeda, MV, BAMPYSVET",
+  "_validation_date": "2026-01",
+
+  "pet_profile": {
+    "name": "Sally",
+    "species": "perro",
+    "breed": "French Poodle",
+    "sex": "hembra",
+    "age_months": 96,
+    "weight_kg": 9.6,
+    "size": "pequeño",
+    "reproductive_status": "esterilizado",
+    "activity_level": "sedentario",
+    "bcs": 6,
+    "current_diet": "concentrado",
+    "medical_conditions": [
+      "diabético",
+      "hepático/hiperlipidemia",
+      "gastritis",
+      "cistitis/enfermedad_urinaria",
+      "hipotiroideo"
+    ],
+    "allergies": []
+  },
+
+  "expected_outputs": {
+    "rer_kcal": 396.0,
+    "rer_tolerance": 0.5,
+    "der_kcal": 534.0,
+    "der_tolerance": 0.5,
+    "weight_phase": "mantenimiento",
+    "llm_model": "gpt-4o",
+    "plan_status": "PENDING_VET",
+    "conditions_count": 5,
+    "requires_vet_review": true,
+    "transition_protocol_required": true
+  },
+
+  "expected_restrictions": {
+    "diabético": {
+      "prohibited": ["azúcar", "miel", "glucosa", "sacarosa", "carbohidratos_simples"],
+      "limited": ["carbohidratos_totales"],
+      "required": ["fibra_soluble", "proteína_magra"]
+    },
+    "hepático/hiperlipidemia": {
+      "prohibited": ["grasas_saturadas", "proteína_alta_densidad"],
+      "limited": ["grasa_total", "proteína"],
+      "required": ["carbohidratos_digestibles"]
+    },
+    "gastritis": {
+      "prohibited": ["irritantes", "especias", "ácidos"],
+      "rules": ["sin_ayunos_mayores_12h", "raciones_pequeñas_frecuentes"]
+    },
+    "cistitis/enfermedad_urinaria": {
+      "prohibited": ["fósforo_alto", "sodio_excesivo"],
+      "required": ["hidratación_alta"]
+    },
+    "hipotiroideo": {
+      "prohibited_en_exceso": ["soya", "col_cruda", "brócoli_crudo"],
+      "note": "Bociógenos deben evitarse en exceso — pequeñas cantidades cocidas son aceptables"
+    }
+  },
+
+  "toxic_check": {
+    "species": "perro",
+    "must_not_contain": [
+      "uvas", "pasas", "cebolla", "ajo", "xilitol", "chocolate",
+      "macadamia", "aguacate", "nuez_moscada", "alcohol", "cafeína"
+    ]
+  },
+
+  "nrc_calculation_trace": {
+    "formula": "RER = 70 × peso_kg^0.75",
+    "peso_kg": 9.6,
+    "peso_075": 5.657,
+    "rer": 396.0,
+    "factors_applied": {
+      "factor_edad": "adulto_senior_8años",
+      "factor_reproductivo": "esterilizado",
+      "factor_actividad": "sedentario",
+      "factor_bcs": "bcs_6_mantenimiento"
+    },
+    "der": 534.0
+  }
+}
