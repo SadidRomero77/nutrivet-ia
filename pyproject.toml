@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "psycopg2-binary>=2.9.11",
+    "sqlalchemy[asyncio]>=2.0.48",
+]
 
 [dependency-groups]
 dev = [
