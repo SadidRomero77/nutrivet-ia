@@ -141,7 +141,7 @@ class PlanGenerationWorker:
         restriction_result = MedicalRestrictionEngine.get_restrictions_for_conditions(
             conditions
         )
-        forbidden_ingredients = restriction_result.forbidden_ingredients
+        forbidden_ingredients = list(restriction_result.prohibited)
 
         # --- Paso 4: Validar alergias ---
         allergy_list = list(pet.allergies) if pet.allergies else []
@@ -185,14 +185,15 @@ class PlanGenerationWorker:
             elif isinstance(ing, dict):
                 ingredients_raw = list(ing.keys())
 
-        toxicity_check = FoodSafetyChecker.validate_plan_ingredients(
+        toxicity_results = FoodSafetyChecker.validate_plan_ingredients(
             ingredients=ingredients_raw,
             species=pet.species.value,
         )
-        if toxicity_check.has_toxic:
+        toxic_found = [r.ingredient for r in toxicity_results if r.is_toxic]
+        if toxic_found:
             raise ValueError(
                 f"Plan rechazado: ingredientes tóxicos detectados: "
-                f"{toxicity_check.toxic_found}"
+                f"{toxic_found}"
             )
 
         # --- Paso 8: Generar substitute_set ---
@@ -225,7 +226,7 @@ class PlanGenerationWorker:
                 "rer_kcal": round(rer, 2),
                 "der_kcal": round(der, 2),
                 "ingredients_count": len(ingredients_raw),
-                "toxic_found": toxicity_check.toxic_found,
+                "toxic_found": toxic_found,
             },
             created_at=datetime.utcnow(),
         )
