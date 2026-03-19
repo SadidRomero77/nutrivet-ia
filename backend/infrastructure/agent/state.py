@@ -52,3 +52,10 @@ class NutriVetState(TypedDict, total=False):
 
     # Historial conversacional
     conversation_history: list[dict[str, str]]  # [{role, content}, ...]
+
+    # Scanner (unit-06)
+    scan_image_bytes: Optional[bytes]            # Bytes de la imagen enviada
+    scan_mime_type: Optional[str]                # MIME type de la imagen
+    scan_semaphore: Optional[str]                # ROJO | AMARILLO | VERDE
+    scan_ingredients: list[str]                  # Ingredientes detectados por OCR
+    scan_issues: list[str]                       # Problemas detectados

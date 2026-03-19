@@ -298,3 +298,41 @@ class AgentTraceModel(Base):
         DateTime(timezone=True), nullable=False
     )
     # NOTA: No existe updated_at — trazas son inmutables (Constitution REGLA 6)
+
+
+class LabelScanModel(Base):
+    """
+    Tabla label_scans — registro de escaneos de etiquetas nutricionales.
+
+    SIN columna brand_name — principio de imparcialidad (Constitution REGLA 7).
+    """
+
+    __tablename__ = "label_scans"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    image_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    image_type: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # nutrition_table | ingredient_list
+    semaphore: Mapped[str] = mapped_column(
+        String(10), nullable=False
+    )  # ROJO | AMARILLO | VERDE
+    ingredients_detected: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=list
+    )  # lista de ingredientes extraídos
+    issues: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=list
+    )  # problemas detectados
+    recomendacion: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # brand_name EXCLUIDO intencionalmente — principio de imparcialidad (REGLA 7)
