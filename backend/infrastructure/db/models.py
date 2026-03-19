@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.dialects.postgresql import BYTEA, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -170,3 +170,131 @@ class ClaimCodeModel(Base):
     )
 
     pet: Mapped["PetModel"] = relationship("PetModel", back_populates="claim_codes")
+
+
+class NutritionPlanModel(Base):
+    """Tabla nutrition_plans — planes nutricionales generados por el agente."""
+
+    __tablename__ = "nutrition_plans"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pets.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    plan_type: Mapped[str] = mapped_column(
+        Enum("estándar", "temporal_medical", "life_stage", name="plan_type_enum"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        Enum("PENDING_VET", "ACTIVE", "UNDER_REVIEW", "ARCHIVED", name="plan_status_enum"),
+        nullable=False, index=True,
+    )
+    modality: Mapped[str] = mapped_column(
+        Enum("natural", "concentrado", name="plan_modality_enum"), nullable=False
+    )
+    rer_kcal: Mapped[float] = mapped_column(Float, nullable=False)
+    der_kcal: Mapped[float] = mapped_column(Float, nullable=False)
+    weight_phase: Mapped[str] = mapped_column(String(20), nullable=False)
+    llm_model_used: Mapped[str] = mapped_column(String(100), nullable=False)
+    content: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # HITL
+    approved_by_vet_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    approval_timestamp: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    review_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    vet_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Trazabilidad
+    agent_trace_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class PlanJobModel(Base):
+    """Tabla plan_jobs — jobs asíncronos de generación de planes (ARQ)."""
+
+    __tablename__ = "plan_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    modality: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(
+        Enum("QUEUED", "PROCESSING", "READY", "FAILED", name="job_status_enum"),
+        nullable=False, default="QUEUED",
+    )
+    plan_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class SubstituteSetModel(Base):
+    """Tabla substitute_sets — ingredientes aprobados para sustitución sin HITL."""
+
+    __tablename__ = "substitute_sets"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("nutrition_plans.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    ingredient: Mapped[str] = mapped_column(String(100), nullable=False)
+    approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AgentTraceModel(Base):
+    """
+    Tabla agent_traces — trazas de ejecución del agente LLM (append-only).
+
+    REGLA 6: Sin updated_at — inmutables post-inserción.
+    Solo INSERT permitido — nunca UPDATE.
+    """
+
+    __tablename__ = "agent_traces"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    plan_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    llm_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    input_summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    output_summary: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    # NOTA: No existe updated_at — trazas son inmutables (Constitution REGLA 6)
