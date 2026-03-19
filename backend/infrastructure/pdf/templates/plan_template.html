@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Plan Nutricional — NutriVet.IA</title>
+  <style>
+    /* ── Reset y base ── */
+    @page {
+      size: A4;
+      margin: 2cm 2.5cm 3cm 2.5cm;
+    }
+    @page {
+      @bottom-center {
+        content: "NutriVet.IA es asesoría nutricional digital — no reemplaza el diagnóstico médico veterinario.";
+        font-size: 7pt;
+        color: #666;
+        font-family: Arial, sans-serif;
+      }
+      @bottom-right {
+        content: counter(page) " / " counter(pages);
+        font-size: 7pt;
+        color: #999;
+        font-family: Arial, sans-serif;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #222; line-height: 1.5; }
+
+    /* ── Encabezado ── */
+    .header { text-align: center; padding-bottom: 12pt; border-bottom: 2px solid #2e7d32; margin-bottom: 14pt; }
+    .header h1 { font-size: 18pt; color: #2e7d32; font-weight: bold; }
+    .header .subtitle { font-size: 11pt; color: #555; margin-top: 3pt; }
+    .header .vet-approval { margin-top: 6pt; font-size: 9pt; color: #1565c0; font-style: italic; }
+
+    /* ── Secciones ── */
+    .section { margin-bottom: 14pt; page-break-inside: avoid; }
+    .section h2 { font-size: 12pt; color: #2e7d32; border-bottom: 1px solid #c8e6c9; padding-bottom: 2pt; margin-bottom: 7pt; }
+
+    /* ── Tablas ── */
+    table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+    th { background-color: #2e7d32; color: white; padding: 4pt 7pt; text-align: left; }
+    td { padding: 3pt 7pt; border-bottom: 1px solid #e0e0e0; }
+    .label-col { font-weight: bold; background-color: #f5f5f5; width: 40%; }
+    tr:nth-child(even) td { background-color: #fafafa; }
+
+    /* ── Calorías ── */
+    .calorie-row { display: flex; gap: 16pt; margin-bottom: 7pt; }
+    .calorie-box { background-color: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 3pt; padding: 6pt 12pt; text-align: center; }
+    .calorie-box .val { font-size: 15pt; font-weight: bold; color: #2e7d32; }
+    .calorie-box .lbl { font-size: 8pt; color: #555; }
+
+    /* ── Transición ── */
+    .transition-item { background-color: #fff8e1; border-left: 3pt solid #ffc107; padding: 3pt 7pt; margin-bottom: 3pt; font-size: 9pt; }
+
+    /* ── Sustitutos ── */
+    .sub-item { padding: 3pt 0; border-bottom: 1px solid #f0f0f0; font-size: 9pt; }
+    .sub-arrow { color: #2e7d32; font-weight: bold; margin: 0 6pt; }
+
+    /* ── Disclaimer body ── */
+    .disclaimer { background-color: #fff3e0; border: 1pt solid #ffb74d; border-radius: 3pt; padding: 5pt 8pt; font-size: 8pt; color: #555; margin-top: 14pt; }
+  </style>
+</head>
+<body>
+
+  <!-- PORTADA / ENCABEZADO -->
+  <div class="header">
+    <h1>Plan Nutricional Personalizado</h1>
+    <div class="subtitle">NutriVet.IA &mdash; Nutrición veterinaria basada en estándares NRC/AAFCO</div>
+    {% if approved_by_vet_name %}
+    <div class="vet-approval">Aprobado por: {{ approved_by_vet_name }}</div>
+    {% endif %}
+  </div>
+
+  <!-- SECCIÓN 1: PERFIL DE LA MASCOTA -->
+  <div class="section">
+    <h2>1. Perfil de la Mascota</h2>
+    <table>
+      {% if seccion_1_perfil.get('especie') %}
+      <tr><td class="label-col">Especie</td><td>{{ seccion_1_perfil.get('especie', '') | capitalize }}</td></tr>
+      {% endif %}
+      {% if seccion_1_perfil.get('raza') %}
+      <tr><td class="label-col">Raza</td><td>{{ seccion_1_perfil.get('raza', '') }}</td></tr>
+      {% endif %}
+      {% if seccion_1_perfil.get('peso_kg') %}
+      <tr><td class="label-col">Peso actual</td><td>{{ seccion_1_perfil.get('peso_kg', '') }} kg</td></tr>
+      {% endif %}
+      {% if seccion_1_perfil.get('edad_anios') %}
+      <tr><td class="label-col">Edad</td><td>{{ seccion_1_perfil.get('edad_anios', '') }} años</td></tr>
+      {% endif %}
+      {% if seccion_1_perfil.get('bcs') %}
+      <tr><td class="label-col">BCS</td><td>{{ seccion_1_perfil.get('bcs', '') }} / 9</td></tr>
+      {% endif %}
+      {% if seccion_1_perfil.get('condiciones') %}
+      <tr><td class="label-col">Condiciones médicas</td><td>{{ seccion_1_perfil.get('condiciones', []) | join(', ') }}</td></tr>
+      {% endif %}
+    </table>
+  </div>
+
+  <!-- SECCIÓN 2: REQUERIMIENTOS CALÓRICOS -->
+  <div class="section">
+    <h2>2. Requerimientos Calóricos (NRC)</h2>
+    <div class="calorie-row">
+      <div class="calorie-box">
+        <div class="val">{{ seccion_2_calorias.get('rer_kcal', rer_kcal) | round(1) }} kcal</div>
+        <div class="lbl">RER (Requerimiento en Reposo)</div>
+      </div>
+      <div class="calorie-box">
+        <div class="val">{{ seccion_2_calorias.get('der_kcal', der_kcal) | round(1) }} kcal/día</div>
+        <div class="lbl">DER (Requerimiento Diario)</div>
+      </div>
+    </div>
+    {% if seccion_2_calorias.get('fase') %}
+    <p style="font-size:9pt;color:#555;">Fase: <strong>{{ seccion_2_calorias.get('fase', '') }}</strong></p>
+    {% endif %}
+  </div>
+
+  <!-- SECCIÓN 3: INGREDIENTES Y PORCIONES -->
+  <div class="section">
+    <h2>3. Ingredientes y Porciones</h2>
+    {% if seccion_3_ingredientes %}
+    <table>
+      <thead>
+        <tr>
+          <th>Ingrediente</th>
+          <th>Cantidad (g)</th>
+          {% if seccion_3_ingredientes[0].get('proteinas_g') is not none %}<th>Proteínas (g)</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for ing in seccion_3_ingredientes %}
+        <tr>
+          <td>{{ ing.get('nombre', '') }}</td>
+          <td>{{ ing.get('gramos', '') }}</td>
+          {% if ing.get('proteinas_g') is not none %}<td>{{ ing.get('proteinas_g', '') }}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="font-size:9pt;color:#777;">Ver contenido del plan para lista de ingredientes.</p>
+    {% endif %}
+  </div>
+
+  <!-- SECCIÓN 4: PROTOCOLO DE TRANSICIÓN (solo si has_transition_protocol) -->
+  {% if has_transition_protocol and seccion_4_transicion %}
+  <div class="section">
+    <h2>4. Protocolo de Transición Alimentaria</h2>
+    <p style="font-size:9pt;margin-bottom:6pt;">Duración: <strong>{{ seccion_4_transicion.get('dias', 7) }} días</strong></p>
+    {% for fase in seccion_4_transicion.get('fases', []) %}
+    <div class="transition-item">{{ fase }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- SECCIÓN 5: SUSTITUTOS APROBADOS -->
+  <div class="section">
+    <h2>{% if has_transition_protocol %}5{% else %}4{% endif %}. Sustitutos Aprobados</h2>
+    {% if seccion_5_sustitutos %}
+    {% for sub in seccion_5_sustitutos %}
+    <div class="sub-item">
+      <strong>{{ sub.get('original', '') }}</strong>
+      <span class="sub-arrow">&rarr;</span>
+      {{ sub.get('alternativa', '') }}
+      {% if sub.get('razon') %}<span style="color:#777;font-size:8pt;"> ({{ sub.get('razon', '') }})</span>{% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="font-size:9pt;color:#777;">No hay sustitutos registrados.</p>
+    {% endif %}
+  </div>
+
+  <!-- DISCLAIMER EN CUERPO DEL DOCUMENTO (además del footer CSS) -->
+  <div class="disclaimer">
+    <strong>Aviso importante:</strong> {{ disclaimer }}
+  </div>
+
+</body>
+</html>

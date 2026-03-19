@@ -1,0 +1,178 @@
+/* NutriVet.IA — Estilo PDF Plan Nutricional */
+
+@page {
+    size: A4;
+    margin: 2cm 2.5cm 3cm 2.5cm;
+
+    @bottom-center {
+        content: "NutriVet.IA es asesoría nutricional digital — no reemplaza el diagnóstico médico veterinario.";
+        font-size: 8pt;
+        color: #666666;
+        font-family: Arial, sans-serif;
+        border-top: 1px solid #cccccc;
+        padding-top: 4pt;
+    }
+
+    @bottom-right {
+        content: "Pág. " counter(page) " de " counter(pages);
+        font-size: 8pt;
+        color: #999999;
+    }
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    color: #222222;
+    line-height: 1.5;
+}
+
+/* Encabezado / Portada */
+.header {
+    text-align: center;
+    padding-bottom: 1cm;
+    border-bottom: 2px solid #2e7d32;
+    margin-bottom: 1cm;
+}
+
+.header h1 {
+    font-size: 20pt;
+    color: #2e7d32;
+    font-weight: bold;
+}
+
+.header .subtitle {
+    font-size: 12pt;
+    color: #555555;
+    margin-top: 4pt;
+}
+
+.header .vet-approval {
+    margin-top: 8pt;
+    font-size: 9pt;
+    color: #1565c0;
+    font-style: italic;
+}
+
+/* Secciones */
+.section {
+    margin-bottom: 0.8cm;
+    page-break-inside: avoid;
+}
+
+.section h2 {
+    font-size: 13pt;
+    color: #2e7d32;
+    border-bottom: 1px solid #c8e6c9;
+    padding-bottom: 3pt;
+    margin-bottom: 0.3cm;
+}
+
+.section h3 {
+    font-size: 11pt;
+    color: #333;
+    margin-bottom: 0.2cm;
+}
+
+/* Tabla de perfil */
+.profile-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+}
+
+.profile-table td {
+    padding: 4pt 8pt;
+    border: 1px solid #e0e0e0;
+}
+
+.profile-table td:first-child {
+    font-weight: bold;
+    background-color: #f5f5f5;
+    width: 40%;
+}
+
+/* Calorias */
+.calorie-box {
+    background-color: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    border-radius: 4pt;
+    padding: 0.3cm 0.5cm;
+    display: inline-block;
+    margin-right: 0.5cm;
+}
+
+.calorie-box .value {
+    font-size: 16pt;
+    font-weight: bold;
+    color: #2e7d32;
+}
+
+.calorie-box .label {
+    font-size: 8pt;
+    color: #555;
+}
+
+/* Lista de ingredientes */
+.ingredient-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+}
+
+.ingredient-table th {
+    background-color: #2e7d32;
+    color: white;
+    padding: 5pt 8pt;
+    text-align: left;
+}
+
+.ingredient-table td {
+    padding: 4pt 8pt;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.ingredient-table tr:nth-child(even) td {
+    background-color: #f9f9f9;
+}
+
+/* Protocolo de transición */
+.transition-phase {
+    background-color: #fff8e1;
+    border-left: 3pt solid #ffc107;
+    padding: 4pt 8pt;
+    margin-bottom: 4pt;
+    font-size: 9pt;
+}
+
+/* Sustitutos */
+.substitute-item {
+    display: flex;
+    align-items: center;
+    padding: 4pt 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 9pt;
+}
+
+.substitute-arrow {
+    color: #2e7d32;
+    font-weight: bold;
+    margin: 0 8pt;
+}
+
+/* Disclaimer visible en body (además del footer CSS) */
+.disclaimer-box {
+    background-color: #fff3e0;
+    border: 1pt solid #ffb74d;
+    border-radius: 3pt;
+    padding: 6pt 10pt;
+    font-size: 8pt;
+    color: #555;
+    margin-top: 0.5cm;
+}
