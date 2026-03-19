@@ -336,3 +336,61 @@ class LabelScanModel(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     # brand_name EXCLUIDO intencionalmente — principio de imparcialidad (REGLA 7)
+
+
+class ConversationModel(Base):
+    """
+    Tabla conversations — historial de conversaciones nutricionales.
+
+    Almacena mensajes del usuario y respuestas del agente para contexto conversacional.
+    SIN datos PII — solo IDs anónimos (Constitution REGLA 6).
+    """
+
+    __tablename__ = "conversations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    response: Mapped[str] = mapped_column(Text, nullable=False)
+    intent: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # nutritional | medical | emergency
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Sin updated_at — historial es append-only (REGLA 6)
+
+
+class AgentQuotaModel(Base):
+    """
+    Tabla agent_quotas — cuota de uso del agente conversacional para tier Free.
+
+    Free tier: 3 preguntas/día × 3 días = 9 total.
+    """
+
+    __tablename__ = "agent_quotas"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, unique=True, index=True
+    )
+    daily_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_reset_date: Mapped[str] = mapped_column(
+        String(10), nullable=False, default=""
+    )  # formato ISO: YYYY-MM-DD
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

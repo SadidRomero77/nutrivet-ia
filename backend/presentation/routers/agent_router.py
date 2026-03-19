@@ -8,14 +8,20 @@ Singleton ORCHESTRATOR compilado una vez y reutilizado entre requests.
 """
 from __future__ import annotations
 
+import json
+import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 
 from backend.infrastructure.agent.nodes.intent_classifier import intent_classifier
 from backend.infrastructure.agent.nodes.load_context import load_context
 from backend.infrastructure.agent.orchestrator import build_orchestrator
 from backend.infrastructure.agent.state import NutriVetState
+from backend.infrastructure.agent.subgraphs.consultation import run_consultation_subgraph
 from backend.infrastructure.agent.subgraphs.consultation_stub import consultation_stub
+from backend.infrastructure.db.agent_quota_repository import PostgreSQLAgentQuotaRepository
+from backend.infrastructure.db.conversation_repository import PostgreSQLConversationRepository
 from backend.infrastructure.agent.subgraphs.plan_generation import (
     nodo_1_verificar_contexto,
     nodo_2_calculate_nutrition,
@@ -38,6 +44,7 @@ from backend.presentation.middleware.auth_middleware import get_current_user
 from backend.presentation.schemas.agent_schemas import AgentRequest, AgentResponse
 from backend.presentation.schemas.scan_schemas import ScanResult
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent"])
 
 
@@ -182,4 +189,77 @@ async def scan_label(
         ingredients_detected=result_state.get("scan_ingredients", []),
         issues=result_state.get("scan_issues", []),
         recomendacion=result_state.get("response", ""),
+    )
+
+
+@router.post(
+    "/v1/agent/chat",
+    status_code=status.HTTP_200_OK,
+    summary="Chat conversacional nutricional — respuesta en streaming SSE",
+)
+async def chat(
+    request: AgentRequest,
+    current_user=Depends(get_current_user),
+    session=Depends(get_db_session),
+) -> StreamingResponse:
+    """
+    Endpoint de chat conversacional nutricional.
+
+    Respuesta en Server-Sent Events (SSE) — chunks de texto progresivos.
+    Consultas médicas → referral determinístico (sin LLM).
+    Emergencias → bypass de freemium gate.
+    Free tier: 3 preguntas/día × 3 días = 9 total.
+
+    Constitution REGLA 8: disclaimer en último chunk.
+    Constitution REGLA 9: consultas médicas → remite al vet.
+    """
+    quota_repo = PostgreSQLAgentQuotaRepository(session)
+    conversation_repo = PostgreSQLConversationRepository(session)
+
+    initial_state = NutriVetState(
+        user_id=str(current_user.user_id),
+        pet_id=request.pet_id or "",
+        user_tier=current_user.tier.value.upper(),
+        user_role=current_user.role.value,
+        message=request.message,
+        modality=request.modality or "natural",
+        agent_traces=[],
+        conversation_history=[],
+        medical_restrictions=[],
+        allergy_list=[],
+        requires_vet_review=False,
+    )
+
+    # Cargar historial previo si hay pet_id
+    if request.pet_id:
+        try:
+            history = await conversation_repo.list_by_pet(request.pet_id, limit=10)
+            initial_state = {**initial_state, "conversation_history": history}
+        except Exception as hist_err:
+            logger.warning("No se pudo cargar historial conversacional: %s", hist_err)
+
+    async def _event_stream():
+        """Genera el stream SSE con la respuesta del agente."""
+        try:
+            result = await run_consultation_subgraph(
+                initial_state,
+                quota_repo=quota_repo,
+                conversation_repo=conversation_repo,
+            )
+            response_text = result.get("response", "")
+            # Enviar en un único evento (respuesta ya completa desde el subgraph)
+            yield f"data: {json.dumps({'chunk': response_text})}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as exc:
+            error_msg = f"Error en el agente conversacional: {str(exc)}"
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
