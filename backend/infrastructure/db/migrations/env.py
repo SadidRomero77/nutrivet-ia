@@ -22,11 +22,9 @@ database_url = os.environ.get("DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 
-# Importar metadata de los modelos para autogenerate.
-# Descomentar cuando los modelos SQLAlchemy estén implementados (unit-02+).
-# from backend.infrastructure.db.models import Base
-# target_metadata = Base.metadata
-target_metadata = None
+# Importar metadata de los modelos para autogenerate (unit-02+).
+from backend.infrastructure.db.models import Base  # noqa: E402, F401
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
