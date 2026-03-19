@@ -1,5 +1,5 @@
 """
-Modelos ORM SQLAlchemy — tablas users y refresh_tokens.
+Modelos ORM SQLAlchemy — tablas users, refresh_tokens, pets, weight_records, claim_codes.
 Estos modelos son solo para persistencia; las entidades de dominio viven en domain/.
 """
 from __future__ import annotations
@@ -7,8 +7,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy.dialects.postgresql import BYTEA, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.infrastructure.db.base import Base
@@ -74,3 +74,99 @@ class RefreshTokenModel(Base):
 
     # Relación con usuario
     user: Mapped["UserModel"] = relationship("UserModel", back_populates="refresh_tokens")
+
+
+class PetModel(Base):
+    """Tabla pets — perfiles de mascotas (AppPet y ClinicPet)."""
+
+    __tablename__ = "pets"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    species: Mapped[str] = mapped_column(
+        Enum("perro", "gato", name="species_enum"), nullable=False
+    )
+    breed: Mapped[str] = mapped_column(String(100), nullable=False)
+    sex: Mapped[str] = mapped_column(
+        Enum("macho", "hembra", name="sex_enum"), nullable=False
+    )
+    age_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    weight_kg: Mapped[float] = mapped_column(nullable=False)
+    size: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    reproductive_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    activity_level: Mapped[str] = mapped_column(String(30), nullable=False)
+    bcs: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Campos médicos encriptados AES-256 (Fernet) en reposo — Constitution REGLA 6
+    medical_conditions_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    allergies_enc: Mapped[bytes | None] = mapped_column(BYTEA, nullable=True)
+    current_diet: Mapped[str] = mapped_column(String(20), nullable=False, default="concentrado")
+    is_clinic_pet: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Datos del dueño (solo para ClinicPet, antes del claim)
+    owner_name_hint: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    owner_phone_hint: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    weight_records: Mapped[list["WeightRecordModel"]] = relationship(
+        "WeightRecordModel", back_populates="pet", cascade="all, delete-orphan"
+    )
+    claim_codes: Mapped[list["ClaimCodeModel"]] = relationship(
+        "ClaimCodeModel", back_populates="pet", cascade="all, delete-orphan"
+    )
+
+
+class WeightRecordModel(Base):
+    """Tabla weight_records — historial de peso append-only."""
+
+    __tablename__ = "weight_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pets.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    weight_kg: Mapped[float] = mapped_column(nullable=False)
+    bcs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recorded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    pet: Mapped["PetModel"] = relationship("PetModel", back_populates="weight_records")
+
+
+class ClaimCodeModel(Base):
+    """Tabla claim_codes — códigos de reclamación para ClinicPet (single-use, TTL 30 días)."""
+
+    __tablename__ = "claim_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pets.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    code: Mapped[str] = mapped_column(String(8), unique=True, nullable=False, index=True)
+    used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    pet: Mapped["PetModel"] = relationship("PetModel", back_populates="claim_codes")
