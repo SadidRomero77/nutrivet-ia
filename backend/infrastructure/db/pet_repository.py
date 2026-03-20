@@ -93,9 +93,15 @@ class PostgreSQLPetRepository(IPetRepository):
         return [self._to_domain(m) for m in result.scalars().all()]
 
     async def count_by_owner(self, owner_id: uuid.UUID) -> int:
-        """Cuenta mascotas activas de un owner."""
-        pets = await self.list_by_owner(owner_id)
-        return len(pets)
+        """Cuenta mascotas propias activas de un owner (excluye ClinicPets reclamadas)."""
+        from sqlalchemy import func as sa_func
+        stmt = select(sa_func.count()).where(
+            PetModel.owner_id == owner_id,
+            PetModel.is_active.is_(True),
+            PetModel.is_clinic_pet.is_(False),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
 
     async def deactivate(self, pet_id: uuid.UUID) -> None:
         """Soft-delete: marca la mascota como inactiva."""
