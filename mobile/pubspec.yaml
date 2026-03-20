@@ -1,0 +1,60 @@
+name: nutrivet_ia
+description: NutriVet.IA — Planes nutricionales personalizados para perros y gatos.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # HTTP client
+  dio: ^5.4.3
+
+  # Local storage
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.2.2
+
+  # Image
+  image_picker: ^1.1.2
+  cached_network_image: ^3.3.1
+
+  # Charts
+  fl_chart: ^0.68.0
+
+  # Share / export
+  share_plus: ^10.0.0
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Animations
+  flutter_animate: ^4.5.0
+
+  # Utils
+  crypto: ^3.0.3
+  intl: ^0.19.0
+  http: ^1.2.1
+  uuid: ^4.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  riverpod_generator: ^2.4.3
+  build_runner: ^2.4.11
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
