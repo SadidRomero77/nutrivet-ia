@@ -97,6 +97,22 @@ class PostgreSQLPetRepository(IPetRepository):
         pets = await self.list_by_owner(owner_id)
         return len(pets)
 
+    async def deactivate(self, pet_id: uuid.UUID) -> None:
+        """Soft-delete: marca la mascota como inactiva."""
+        model = await self._session.get(PetModel, pet_id)
+        if model is not None:
+            model.is_active = False
+
+    async def list_clinic_by_vet(self, vet_id: uuid.UUID) -> list[PetProfile]:
+        """Lista ClinicPets activos creados por un veterinario."""
+        stmt = select(PetModel).where(
+            PetModel.owner_id == vet_id,
+            PetModel.is_clinic_pet.is_(True),
+            PetModel.is_active.is_(True),
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(m) for m in result.scalars().all()]
+
     def _to_domain(self, model: PetModel) -> PetProfile:
         """Mapea PetModel (ORM) → PetProfile (dominio), desencriptando campos médicos."""
         conditions_raw: list[str] = (

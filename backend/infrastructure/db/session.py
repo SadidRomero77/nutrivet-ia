@@ -9,8 +9,11 @@ import os
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 _DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev",
+    "DATABASE_URL_ASYNC",
+    os.environ.get(
+        "DATABASE_URL",
+        "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev",
+    ),
 )
 
 engine = create_async_engine(_DATABASE_URL, echo=False, pool_pre_ping=True)

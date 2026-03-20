@@ -63,6 +63,11 @@ class OpenRouterClient:
 
     def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+        if not self._api_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY no configurada. "
+                "Agrégala a .env.dev o como variable de entorno."
+            )
         self._http_referer = os.environ.get("OPENROUTER_REFERER", "https://nutrivet-ia.com")
 
     async def generate(
@@ -140,8 +145,7 @@ class OpenRouterClient:
 
         start = time.monotonic()
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-            response = client.post(_OPENROUTER_API_URL, json=payload, headers=headers)
-            resp = await response
+            resp = await client.post(_OPENROUTER_API_URL, json=payload, headers=headers)
             resp.raise_for_status()
 
         latency_ms = int((time.monotonic() - start) * 1000)

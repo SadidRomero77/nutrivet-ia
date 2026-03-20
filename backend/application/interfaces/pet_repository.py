@@ -35,3 +35,13 @@ class IPetRepository(ABC):
     async def count_by_owner(self, owner_id: uuid.UUID) -> int:
         """Cuenta las mascotas activas de un owner (para validar límites de tier)."""
         ...
+
+    @abstractmethod
+    async def deactivate(self, pet_id: uuid.UUID) -> None:
+        """Soft-delete: marca la mascota como inactiva (is_active = False)."""
+        ...
+
+    @abstractmethod
+    async def list_clinic_by_vet(self, vet_id: uuid.UUID) -> list[PetProfile]:
+        """Lista ClinicPets activos creados por un veterinario."""
+        ...

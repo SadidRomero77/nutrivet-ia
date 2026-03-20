@@ -30,6 +30,7 @@ from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTrac
 from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
 from backend.infrastructure.db.plan_job_repository import PostgreSQLPlanJobRepository
 from backend.infrastructure.db.plan_repository import PostgreSQLPlanRepository
+from backend.presentation.schemas.pet_schemas import PetResponse
 from backend.infrastructure.db.session import get_db_session
 from backend.presentation.middleware.auth_middleware import get_current_user, require_role
 from backend.presentation.schemas.plan_schemas import (
@@ -308,3 +309,35 @@ async def list_pending_plans(
     plan_repo = PostgreSQLPlanRepository(session)
     plans = await plan_repo.list_pending_vet()
     return [_plan_to_summary(p) for p in plans]
+
+
+def _vet_pet_to_response(pet: Any) -> PetResponse:
+    """Convierte PetProfile → PetResponse para endpoints de vet."""
+    return PetResponse(
+        pet_id=pet.pet_id,
+        owner_id=pet.owner_id,
+        name=pet.name,
+        species=pet.species.value,
+        breed=pet.breed,
+        sex=pet.sex.value,
+        age_months=pet.age_months,
+        weight_kg=pet.weight_kg,
+        size=pet.size.value if pet.size else None,
+        reproductive_status=pet.reproductive_status.value,
+        activity_level=pet.activity_level.value,
+        bcs=pet.bcs.value,
+        medical_conditions=[c.value for c in pet.medical_conditions],
+        allergies=pet.allergies,
+        current_diet=pet.current_diet.value,
+    )
+
+
+@vet_router.get("/v1/vet/patients", response_model=list[PetResponse])
+async def list_vet_patients(
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(require_role("vet")),
+) -> list[PetResponse]:
+    """Lista ClinicPets creados por el vet autenticado."""
+    pet_repo = PostgreSQLPetRepository(session)
+    pets = await pet_repo.list_clinic_by_vet(user.user_id)
+    return [_vet_pet_to_response(p) for p in pets]

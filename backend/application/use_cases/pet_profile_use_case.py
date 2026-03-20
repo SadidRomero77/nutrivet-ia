@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 from backend.application.interfaces.pet_repository import IPetRepository
+from backend.application.interfaces.plan_repository import IPlanRepository
 from backend.domain.aggregates.pet_profile import MedicalCondition, PetProfile
 from backend.domain.aggregates.user_account import UserTier
 from backend.domain.exceptions.domain_errors import DomainError
@@ -33,8 +34,13 @@ class PetProfileUseCase:
     - add_medical_condition: Agrega condición médica y señala si requiere revisión vet.
     """
 
-    def __init__(self, pet_repo: IPetRepository) -> None:
+    def __init__(
+        self,
+        pet_repo: IPetRepository,
+        plan_repo: IPlanRepository | None = None,
+    ) -> None:
         self._pet_repo = pet_repo
+        self._plan_repo = plan_repo
 
     async def create_pet(
         self,
@@ -140,6 +146,36 @@ class PetProfileUseCase:
 
         await self._pet_repo.update(pet)
         return pet
+
+    async def delete_pet(
+        self,
+        pet_id: uuid.UUID,
+        requester_id: uuid.UUID,
+    ) -> None:
+        """
+        Elimina (soft-delete) una mascota. Solo el owner puede eliminarla.
+        Bloqueado si la mascota tiene algún plan ACTIVE o PENDING_VET asignado.
+
+        Raises:
+            DomainError: Si la mascota no existe, acceso denegado, o tiene planes activos.
+        """
+        pet = await self._pet_repo.find_by_id(pet_id)
+        if pet is None:
+            raise DomainError(f"Mascota con ID '{pet_id}' no encontrada.")
+        if pet.owner_id != requester_id:
+            raise DomainError("Acceso denegado: no eres el dueño de esta mascota.")
+
+        # No se puede eliminar si tiene planes activos o pendientes
+        if self._plan_repo is not None:
+            plan_activo = await self._plan_repo.find_active_by_pet(pet_id)
+            if plan_activo is not None:
+                raise DomainError(
+                    "No se puede eliminar la mascota porque tiene un plan nutricional "
+                    f"en estado '{plan_activo.status.value}'. "
+                    "Archiva o elimina el plan antes de continuar."
+                )
+
+        await self._pet_repo.deactivate(pet_id)
 
     async def list_pets(self, owner_id: uuid.UUID) -> list[PetProfile]:
         """Lista todas las mascotas activas del owner."""

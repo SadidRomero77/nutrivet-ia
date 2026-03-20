@@ -16,6 +16,7 @@ from backend.domain.exceptions.domain_errors import DomainError
 from backend.infrastructure.auth.jwt_service import TokenPayload
 from backend.infrastructure.db.claim_code_repository import PostgreSQLClaimCodeRepository
 from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
+from backend.infrastructure.db.plan_repository import PostgreSQLPlanRepository
 from backend.infrastructure.db.session import get_db_session
 from backend.infrastructure.db.weight_repository import PostgreSQLWeightRepository
 from backend.domain.value_objects.bcs import BCS
@@ -36,7 +37,10 @@ router = APIRouter(prefix="/v1/pets", tags=["pets"])
 
 
 def _pet_use_case(session: AsyncSession) -> PetProfileUseCase:
-    return PetProfileUseCase(pet_repo=PostgreSQLPetRepository(session))
+    return PetProfileUseCase(
+        pet_repo=PostgreSQLPetRepository(session),
+        plan_repo=PostgreSQLPlanRepository(session),
+    )
 
 
 def _weight_use_case(session: AsyncSession) -> WeightTrackingUseCase:
@@ -211,6 +215,25 @@ async def get_weight_history(
         )
     except DomainError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+
+
+@router.delete("/{pet_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pet(
+    pet_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(require_role("owner")),
+) -> None:
+    """Elimina una mascota (soft-delete). Bloqueado si tiene planes activos."""
+    try:
+        uc = _pet_use_case(session)
+        await uc.delete_pet(pet_id=pet_id, requester_id=user.user_id)
+    except DomainError as e:
+        code = (
+            status.HTTP_404_NOT_FOUND if "no encontrada" in str(e)
+            else status.HTTP_409_CONFLICT if "plan nutricional" in str(e)
+            else status.HTTP_403_FORBIDDEN
+        )
+        raise HTTPException(status_code=code, detail=str(e)) from e
 
 
 @router.post("/clinic", response_model=ClaimCodeResponse, status_code=201)
