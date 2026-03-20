@@ -62,7 +62,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear cuenta')),
+      appBar: AppBar(title: const NutrivetTitle('Registro')),
+      bottomNavigationBar: const AppFooter(),
       body: ResponsiveBody(
         formLayout: true,
         child: Padding(
@@ -186,7 +187,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         )
                       : const Text('Crear cuenta'),
                 ),
-                const AppFooter(),
               ],
             ),
           ),

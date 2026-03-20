@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/app_footer.dart';
 import '../data/pet_repository.dart';
 import 'dashboard_screen.dart';
 
@@ -101,7 +102,7 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Paso ${_currentPage + 1} de 6'),
+        title: NutrivetTitle('Paso ${_currentPage + 1} de 6'),
         leading: _currentPage > 0
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -115,6 +116,7 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
           ),
         ),
       ),
+      bottomNavigationBar: const AppFooter(),
       body: PageView(
         controller: _pageCtrl,
         physics: const NeverScrollableScrollPhysics(),
@@ -184,8 +186,8 @@ class _Step1BasicInfoState extends ConsumerState<_Step1BasicInfo> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Form(
         key: _formKey,
         child: Column(
@@ -227,11 +229,14 @@ class _Step1BasicInfoState extends ConsumerState<_Step1BasicInfo> {
               ],
               onChanged: (v) => setState(() => _sex = v!),
             ),
-            const Spacer(),
-            ElevatedButton(
-              key: const ValueKey('next_button'),
-              onPressed: _save,
-              child: const Text('Siguiente'),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                key: const ValueKey('next_button'),
+                onPressed: _save,
+                child: const Text('Siguiente'),
+              ),
             ),
           ],
         ),
@@ -289,8 +294,8 @@ class _Step2PhysicalState extends ConsumerState<_Step2Physical> {
   Widget build(BuildContext context) {
     final isPerro = widget.data['species'] == 'perro';
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Form(
         key: _formKey,
         child: Column(
@@ -332,8 +337,11 @@ class _Step2PhysicalState extends ConsumerState<_Step2Physical> {
                 validator: (v) => v == null ? 'Selecciona talla' : null,
               ),
             ],
-            const Spacer(),
-            ElevatedButton(onPressed: _save, child: const Text('Siguiente')),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(onPressed: _save, child: const Text('Siguiente')),
+            ),
           ],
         ),
       ),
@@ -376,8 +384,8 @@ class _Step3HealthState extends ConsumerState<_Step3Health> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -424,8 +432,11 @@ class _Step3HealthState extends ConsumerState<_Step3Health> {
                       : Colors.green,
             ),
           ),
-          const Spacer(),
-          ElevatedButton(onPressed: _save, child: const Text('Siguiente')),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(onPressed: _save, child: const Text('Siguiente')),
+          ),
         ],
       ),
     );
@@ -467,8 +478,8 @@ class _Step4ActivityState extends ConsumerState<_Step4Activity> {
     final isPerro = widget.data['species'] == 'perro';
     final options = isPerro ? _activityLevelsDog : _activityLevelsCat;
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -485,10 +496,13 @@ class _Step4ActivityState extends ConsumerState<_Step4Activity> {
               onChanged: (v) => setState(() => _activityLevel = v),
             ),
           ),
-          const Spacer(),
-          ElevatedButton(
-            onPressed: _activityLevel != null ? _save : null,
-            child: const Text('Siguiente'),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _activityLevel != null ? _save : null,
+              child: const Text('Siguiente'),
+            ),
           ),
         ],
       ),
@@ -547,8 +561,8 @@ class _Step5MedicalState extends ConsumerState<_Step5Medical> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -556,34 +570,31 @@ class _Step5MedicalState extends ConsumerState<_Step5Medical> {
             'Antecedentes médicos',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          Expanded(
-            child: ListView(
-              children: _medicalConditions
-                  .map(
-                    (cond) => CheckboxListTile(
-                      key: ValueKey('cond_$cond'),
-                      title: Text(cond),
-                      value: _selectedConditions.contains(cond),
-                      onChanged: (v) => setState(() {
-                        if (v == true) {
-                          if (cond == 'Ninguno conocido') {
-                            _selectedConditions
-                              ..clear()
-                              ..add(cond);
-                          } else {
-                            _selectedConditions
-                              ..remove('Ninguno conocido')
-                              ..add(cond);
-                          }
-                        } else {
-                          _selectedConditions.remove(cond);
-                        }
-                      }),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
+          ..._medicalConditions
+              .map(
+                (cond) => CheckboxListTile(
+                  key: ValueKey('cond_$cond'),
+                  title: Text(cond),
+                  value: _selectedConditions.contains(cond),
+                  onChanged: (v) => setState(() {
+                    if (v == true) {
+                      if (cond == 'Ninguno conocido') {
+                        _selectedConditions
+                          ..clear()
+                          ..add(cond);
+                      } else {
+                        _selectedConditions
+                          ..remove('Ninguno conocido')
+                          ..add(cond);
+                      }
+                    } else {
+                      _selectedConditions.remove(cond);
+                    }
+                  }),
+                ),
+              )
+              .toList(),
+          const SizedBox(height: 8),
           TextFormField(
             controller: _allergiesCtrl,
             decoration: const InputDecoration(
@@ -591,8 +602,11 @@ class _Step5MedicalState extends ConsumerState<_Step5Medical> {
               hintText: 'pollo, trigo, ...',
             ),
           ),
-          const SizedBox(height: 16),
-          ElevatedButton(onPressed: _save, child: const Text('Siguiente')),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(onPressed: _save, child: const Text('Siguiente')),
+          ),
         ],
       ),
     );
@@ -636,8 +650,8 @@ class _Step6FeedingState extends ConsumerState<_Step6Feeding> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -654,19 +668,22 @@ class _Step6FeedingState extends ConsumerState<_Step6Feeding> {
               groupValue: _feedingType,
               onChanged: (v) => setState(() => _feedingType = v),
             ),
-          const Spacer(),
-          ElevatedButton(
-            onPressed: (_feedingType != null && !widget.loading) ? _save : null,
-            child: widget.loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Crear perfil'),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: (_feedingType != null && !widget.loading) ? _save : null,
+              child: widget.loading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Crear perfil'),
+            ),
           ),
         ],
       ),

@@ -1,12 +1,12 @@
-/// Tema visual de NutriVet.IA — Paleta BampysVet.
+/// Tema visual de NutriVet.IA — Paleta BampysVet Verde.
 ///
-/// Paleta extraída del logotipo oficial de BampysVet:
-///   • Azul royal cobalto   → color primario de marca
-///   • Ámbar cálido         → acción / CTA
-///   • Verde salud          → éxito / planes activos
+/// Paleta centrada en el verde BampysVet #25D366:
+///   • Verde BampysVet   → color primario de marca
+///   • Ámbar cálido      → acción / CTA secundario
+///   • Verde salud       → éxito / planes activos
 ///
 /// Material 3 · Soporte completo light + dark.
-/// Dark mode: primaries más claras, superficies navy profundo.
+/// Dark mode: primaries más claras, superficies verde profundo.
 /// Contraste AA/AAA en todos los pares texto/fondo.
 library;
 
@@ -14,16 +14,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 // ─── Paleta de marca BampysVet ─────────────────────────────────────────────
-/// Azul royal del logotipo BampysVet — color primario.
-const Color kBampysBlue = Color(0xFF1853C0);
+/// Verde BampysVet — color primario de marca.
+const Color kBampysGreen = Color(0xFF25D366);
 
 /// Variante clara para superficies y contenedores en modo claro.
-const Color kBampysBlueContainer = Color(0xFFD6E4FF);
+const Color kBampysGreenContainer = Color(0xFFB7F0CF);
 
 /// Ámbar cálido — acción secundaria, FABs, badges de urgencia.
 const Color kWarmAmber = Color(0xFFF57C00);
 
-/// Verde salud — plan ACTIVE, éxito, confirmaciones.
+/// Verde salud oscuro — plan ACTIVE, éxito, confirmaciones.
 const Color kHealthGreen = Color(0xFF2E7D32);
 
 /// Rojo clínico — error, tóxico, plan devuelto.
@@ -38,21 +38,23 @@ class AppTheme {
   // ─── Tema claro ──────────────────────────────────────────────────────────
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(
-      seedColor: kBampysBlue,
+      seedColor: kBampysGreen,
       brightness: Brightness.light,
-      primary: kBampysBlue,
-      primaryContainer: kBampysBlueContainer,
+      primary: kBampysGreen,
+      onPrimary: Colors.white,
+      primaryContainer: kBampysGreenContainer,
+      onPrimaryContainer: const Color(0xFF002114),
       secondary: kWarmAmber,
       secondaryContainer: const Color(0xFFFFE0B2),
       tertiary: kHealthGreen,
       tertiaryContainer: const Color(0xFFC8E6C9),
       error: kClinicalRed,
       errorContainer: const Color(0xFFFFDAD6),
-      surface: const Color(0xFFF8F9FF),   // superficie con leve tinte azul
-      onSurface: const Color(0xFF1A1C2E),
-      onSurfaceVariant: const Color(0xFF44475A),
-      outline: const Color(0xFF8B8FA8),
-      outlineVariant: const Color(0xFFCDCEE0),
+      surface: const Color(0xFFF5FFF9),   // superficie con leve tinte verde
+      onSurface: const Color(0xFF1A2B22),
+      onSurfaceVariant: const Color(0xFF3D5248),
+      outline: const Color(0xFF6B8A76),
+      outlineVariant: const Color(0xFFB8D9C5),
     );
 
     return ThemeData(
@@ -62,7 +64,7 @@ class AppTheme {
 
       // ── AppBar ──────────────────────────────────────────────────────────
       appBarTheme: AppBarTheme(
-        backgroundColor: kBampysBlue,
+        backgroundColor: kBampysGreen,
         foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 2,
@@ -81,7 +83,7 @@ class AppTheme {
       // ── Botones elevados ────────────────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: kBampysBlue,
+          backgroundColor: kBampysGreen,
           foregroundColor: Colors.white,
           // Touch target M3: mínimo 48dp
           minimumSize: const Size.fromHeight(48),
@@ -101,8 +103,8 @@ class AppTheme {
       // ── Botones outlined ────────────────────────────────────────────────
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: kBampysBlue,
-          side: const BorderSide(color: kBampysBlue, width: 1.5),
+          foregroundColor: kBampysGreen,
+          side: const BorderSide(color: kBampysGreen, width: 1.5),
           minimumSize: const Size.fromHeight(48),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
@@ -119,7 +121,7 @@ class AppTheme {
       // ── TextButton ──────────────────────────────────────────────────────
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: kBampysBlue,
+          foregroundColor: kBampysGreen,
           minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           textStyle: const TextStyle(
@@ -145,15 +147,15 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFCDCEE0)),
+          borderSide: const BorderSide(color: Color(0xFFB8D9C5)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFCDCEE0)),
+          borderSide: const BorderSide(color: Color(0xFFB8D9C5)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kBampysBlue, width: 2),
+          borderSide: const BorderSide(color: kBampysGreen, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -163,20 +165,20 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: kClinicalRed, width: 2),
         ),
-        labelStyle: const TextStyle(color: Color(0xFF44475A)),
-        floatingLabelStyle: const TextStyle(color: kBampysBlue),
-        prefixIconColor: const Color(0xFF8B8FA8),
-        suffixIconColor: const Color(0xFF8B8FA8),
+        labelStyle: const TextStyle(color: Color(0xFF3D5248)),
+        floatingLabelStyle: const TextStyle(color: kBampysGreen),
+        prefixIconColor: const Color(0xFF6B8A76),
+        suffixIconColor: const Color(0xFF6B8A76),
       ),
 
       // ── Cards ───────────────────────────────────────────────────────────
       cardTheme: CardThemeData(
         elevation: 1,
-        surfaceTintColor: kBampysBlue,
+        surfaceTintColor: kBampysGreen,
         color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFE8EAF6), width: 0.5),
+          side: const BorderSide(color: Color(0xFFD4EEE0), width: 0.5),
         ),
         margin: const EdgeInsets.only(bottom: 12),
         clipBehavior: Clip.antiAlias,
@@ -184,14 +186,14 @@ class AppTheme {
 
       // ── Chips ───────────────────────────────────────────────────────────
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFFEEF2FF),
-        selectedColor: kBampysBlueContainer,
-        labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF1A1C2E)),
+        backgroundColor: const Color(0xFFE8F8EF),
+        selectedColor: kBampysGreenContainer,
+        labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF1A2B22)),
         iconTheme: const IconThemeData(size: 16),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: Color(0xFFCDCEE0)),
+          side: const BorderSide(color: Color(0xFFB8D9C5)),
         ),
       ),
 
@@ -203,14 +205,14 @@ class AppTheme {
 
       // ── Divider ─────────────────────────────────────────────────────────
       dividerTheme: const DividerThemeData(
-        color: Color(0xFFE8EAF6),
+        color: Color(0xFFD4EEE0),
         thickness: 1,
         space: 1,
       ),
 
       // ── Snackbar ────────────────────────────────────────────────────────
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: const Color(0xFF1A1C2E),
+        backgroundColor: const Color(0xFF1A2B22),
         contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
@@ -219,11 +221,11 @@ class AppTheme {
       // ── NavigationBar (para tablets con bottom nav) ─────────────────────
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
-        indicatorColor: kBampysBlueContainer,
+        indicatorColor: kBampysGreenContainer,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const TextStyle(
-              color: kBampysBlue,
+              color: kBampysGreen,
               fontWeight: FontWeight.w600,
               fontSize: 12,
             );
@@ -232,16 +234,16 @@ class AppTheme {
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: kBampysBlue);
+            return const IconThemeData(color: kBampysGreen);
           }
-          return const IconThemeData(color: Color(0xFF8B8FA8));
+          return const IconThemeData(color: Color(0xFF6B8A76));
         }),
       ),
 
       // ── Tabs ────────────────────────────────────────────────────────────
       tabBarTheme: const TabBarThemeData(
         labelColor: Colors.white,
-        unselectedLabelColor: Color(0xFFB8C8F0),
+        unselectedLabelColor: Color(0xFFB8EDD0),
         indicatorColor: Colors.white,
         indicatorSize: TabBarIndicatorSize.tab,
         labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
@@ -250,28 +252,28 @@ class AppTheme {
 
       // ── Slider ──────────────────────────────────────────────────────────
       sliderTheme: SliderThemeData(
-        activeTrackColor: kBampysBlue,
-        thumbColor: kBampysBlue,
-        inactiveTrackColor: kBampysBlueContainer,
-        overlayColor: kBampysBlue.withAlpha(30),
-        valueIndicatorColor: kBampysBlue,
+        activeTrackColor: kBampysGreen,
+        thumbColor: kBampysGreen,
+        inactiveTrackColor: kBampysGreenContainer,
+        overlayColor: kBampysGreen.withAlpha(30),
+        valueIndicatorColor: kBampysGreen,
         valueIndicatorTextStyle: const TextStyle(color: Colors.white),
       ),
 
       // ── Checkbox & Switch ────────────────────────────────────────────────
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((states) =>
-            states.contains(WidgetState.selected) ? kBampysBlue : null),
+            states.contains(WidgetState.selected) ? kBampysGreen : null),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) =>
             states.contains(WidgetState.selected) ? Colors.white : null),
         trackColor: WidgetStateProperty.resolveWith((states) =>
-            states.contains(WidgetState.selected) ? kBampysBlue : null),
+            states.contains(WidgetState.selected) ? kBampysGreen : null),
       ),
 
       // ── Scaffold ────────────────────────────────────────────────────────
-      scaffoldBackgroundColor: const Color(0xFFF8F9FF),
+      scaffoldBackgroundColor: const Color(0xFFF5FFF9),
 
       // ── Typography (M3 type scale) ───────────────────────────────────────
       textTheme: _buildTextTheme(isDark: false),
@@ -281,13 +283,13 @@ class AppTheme {
   // ─── Tema oscuro ─────────────────────────────────────────────────────────
   static ThemeData get dark {
     final scheme = ColorScheme.fromSeed(
-      seedColor: kBampysBlue,
+      seedColor: kBampysGreen,
       brightness: Brightness.dark,
       // En dark mode el primary debe ser claro para contrastar con el fondo oscuro
-      primary: const Color(0xFF90CAFF),        // Azul claro sobre fondo oscuro
-      primaryContainer: const Color(0xFF0D3A8C), // Contenedor azul oscuro
-      onPrimary: const Color(0xFF001E45),
-      onPrimaryContainer: const Color(0xFFD6E4FF),
+      primary: const Color(0xFF5AE89B),        // Verde claro sobre fondo oscuro
+      onPrimary: const Color(0xFF003822),
+      primaryContainer: const Color(0xFF00522E), // Contenedor verde oscuro
+      onPrimaryContainer: const Color(0xFFB7F0CF),
       secondary: const Color(0xFFFFB74D),       // Ámbar cálido claro
       secondaryContainer: const Color(0xFF7A3A00),
       onSecondary: const Color(0xFF3E1C00),
@@ -295,14 +297,14 @@ class AppTheme {
       tertiaryContainer: const Color(0xFF1B4A1E),
       error: const Color(0xFFFF8A80),
       errorContainer: const Color(0xFF7A0000),
-      surface: const Color(0xFF131929),         // Superficie navy profundo
-      surfaceContainerHighest: const Color(0xFF1E2A3D),
-      onSurface: const Color(0xFFE2E8F8),       // Texto claro — contraste AA+
-      onSurfaceVariant: const Color(0xFFA8B4D0),
-      outline: const Color(0xFF6B7A99),
-      outlineVariant: const Color(0xFF2D3A52),
-      inverseSurface: const Color(0xFFE2E8F8),
-      onInverseSurface: const Color(0xFF131929),
+      surface: const Color(0xFF0D1A12),         // Superficie verde profundo
+      surfaceContainerHighest: const Color(0xFF1A2D1E),
+      onSurface: const Color(0xFFE0F5EA),       // Texto claro — contraste AA+
+      onSurfaceVariant: const Color(0xFFA8C9B4),
+      outline: const Color(0xFF5A8A6A),
+      outlineVariant: const Color(0xFF1F3B28),
+      inverseSurface: const Color(0xFFE0F5EA),
+      onInverseSurface: const Color(0xFF0D1A12),
     );
 
     return ThemeData(
@@ -312,28 +314,28 @@ class AppTheme {
 
       // ── AppBar en dark ───────────────────────────────────────────────────
       appBarTheme: AppBarTheme(
-        backgroundColor: const Color(0xFF0D1929),
-        foregroundColor: const Color(0xFFE2E8F8),
+        backgroundColor: const Color(0xFF0A1A0E),
+        foregroundColor: const Color(0xFFE0F5EA),
         elevation: 0,
         scrolledUnderElevation: 2,
-        surfaceTintColor: const Color(0xFF90CAFF),
+        surfaceTintColor: const Color(0xFF5AE89B),
         centerTitle: false,
         systemOverlayStyle: SystemUiOverlayStyle.light,
         titleTextStyle: const TextStyle(
-          color: Color(0xFFE2E8F8),
+          color: Color(0xFFE0F5EA),
           fontSize: 20,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.15,
         ),
-        iconTheme: const IconThemeData(color: Color(0xFFE2E8F8)),
-        actionsIconTheme: const IconThemeData(color: Color(0xFFE2E8F8)),
+        iconTheme: const IconThemeData(color: Color(0xFFE0F5EA)),
+        actionsIconTheme: const IconThemeData(color: Color(0xFFE0F5EA)),
       ),
 
       // ── Botones en dark ──────────────────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF90CAFF),
-          foregroundColor: const Color(0xFF001E45),
+          backgroundColor: const Color(0xFF5AE89B),
+          foregroundColor: const Color(0xFF003822),
           minimumSize: const Size.fromHeight(48),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           elevation: 2,
@@ -350,8 +352,8 @@ class AppTheme {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF90CAFF),
-          side: const BorderSide(color: Color(0xFF90CAFF), width: 1.5),
+          foregroundColor: const Color(0xFF5AE89B),
+          side: const BorderSide(color: Color(0xFF5AE89B), width: 1.5),
           minimumSize: const Size.fromHeight(48),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
@@ -367,7 +369,7 @@ class AppTheme {
 
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF90CAFF),
+          foregroundColor: const Color(0xFF5AE89B),
           minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
@@ -384,19 +386,19 @@ class AppTheme {
       // ── Inputs en dark ───────────────────────────────────────────────────
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF1E2A3D),
+        fillColor: const Color(0xFF1A2D1E),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF2D3A52)),
+          borderSide: const BorderSide(color: Color(0xFF1F3B28)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF2D3A52)),
+          borderSide: const BorderSide(color: Color(0xFF1F3B28)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF90CAFF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF5AE89B), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -406,20 +408,20 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFFF8A80), width: 2),
         ),
-        labelStyle: const TextStyle(color: Color(0xFFA8B4D0)),
-        floatingLabelStyle: const TextStyle(color: Color(0xFF90CAFF)),
-        prefixIconColor: const Color(0xFF6B7A99),
-        suffixIconColor: const Color(0xFF6B7A99),
+        labelStyle: const TextStyle(color: Color(0xFFA8C9B4)),
+        floatingLabelStyle: const TextStyle(color: Color(0xFF5AE89B)),
+        prefixIconColor: const Color(0xFF5A8A6A),
+        suffixIconColor: const Color(0xFF5A8A6A),
       ),
 
       // ── Cards en dark ────────────────────────────────────────────────────
       cardTheme: const CardThemeData(
         elevation: 0,
-        color: Color(0xFF1E2A3D),
-        surfaceTintColor: Color(0xFF90CAFF),
+        color: Color(0xFF1A2D1E),
+        surfaceTintColor: Color(0xFF5AE89B),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(16)),
-          side: BorderSide(color: Color(0xFF2D3A52), width: 1),
+          side: BorderSide(color: Color(0xFF1F3B28), width: 1),
         ),
         margin: EdgeInsets.only(bottom: 12),
         clipBehavior: Clip.antiAlias,
@@ -427,14 +429,14 @@ class AppTheme {
 
       // ── Chips en dark ────────────────────────────────────────────────────
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFF1E2A3D),
-        selectedColor: const Color(0xFF0D3A8C),
-        labelStyle: const TextStyle(fontSize: 12, color: Color(0xFFE2E8F8)),
-        iconTheme: const IconThemeData(size: 16, color: Color(0xFFA8B4D0)),
+        backgroundColor: const Color(0xFF1A2D1E),
+        selectedColor: const Color(0xFF00522E),
+        labelStyle: const TextStyle(fontSize: 12, color: Color(0xFFE0F5EA)),
+        iconTheme: const IconThemeData(size: 16, color: Color(0xFFA8C9B4)),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: Color(0xFF2D3A52)),
+          side: const BorderSide(color: Color(0xFF1F3B28)),
         ),
       ),
 
@@ -442,30 +444,30 @@ class AppTheme {
       listTileTheme: const ListTileThemeData(
         minVerticalPadding: 12,
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        textColor: Color(0xFFE2E8F8),
-        iconColor: Color(0xFFA8B4D0),
+        textColor: Color(0xFFE0F5EA),
+        iconColor: Color(0xFFA8C9B4),
       ),
 
       // ── Divider en dark ──────────────────────────────────────────────────
       dividerTheme: const DividerThemeData(
-        color: Color(0xFF2D3A52),
+        color: Color(0xFF1F3B28),
         thickness: 1,
         space: 1,
       ),
 
       // ── Snackbar en dark ─────────────────────────────────────────────────
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: const Color(0xFF1E2A3D),
-        contentTextStyle: const TextStyle(color: Color(0xFFE2E8F8), fontSize: 14),
+        backgroundColor: const Color(0xFF1A2D1E),
+        contentTextStyle: const TextStyle(color: Color(0xFFE0F5EA), fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ),
 
       // ── Tabs en dark ─────────────────────────────────────────────────────
       tabBarTheme: const TabBarThemeData(
-        labelColor: Color(0xFF90CAFF),
-        unselectedLabelColor: Color(0xFF6B7A99),
-        indicatorColor: Color(0xFF90CAFF),
+        labelColor: Color(0xFF5AE89B),
+        unselectedLabelColor: Color(0xFF5A8A6A),
+        indicatorColor: Color(0xFF5AE89B),
         indicatorSize: TabBarIndicatorSize.tab,
         labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
@@ -473,16 +475,16 @@ class AppTheme {
 
       // ── Slider en dark ───────────────────────────────────────────────────
       sliderTheme: SliderThemeData(
-        activeTrackColor: const Color(0xFF90CAFF),
-        thumbColor: const Color(0xFF90CAFF),
-        inactiveTrackColor: const Color(0xFF2D3A52),
-        overlayColor: const Color(0xFF90CAFF).withAlpha(30),
-        valueIndicatorColor: const Color(0xFF90CAFF),
-        valueIndicatorTextStyle: const TextStyle(color: Color(0xFF001E45)),
+        activeTrackColor: const Color(0xFF5AE89B),
+        thumbColor: const Color(0xFF5AE89B),
+        inactiveTrackColor: const Color(0xFF1F3B28),
+        overlayColor: const Color(0xFF5AE89B).withAlpha(30),
+        valueIndicatorColor: const Color(0xFF5AE89B),
+        valueIndicatorTextStyle: const TextStyle(color: Color(0xFF003822)),
       ),
 
       // ── Scaffold en dark ─────────────────────────────────────────────────
-      scaffoldBackgroundColor: const Color(0xFF0F1929),
+      scaffoldBackgroundColor: const Color(0xFF0D1A12),
 
       // ── Typography en dark ───────────────────────────────────────────────
       textTheme: _buildTextTheme(isDark: true),
@@ -491,8 +493,8 @@ class AppTheme {
 
   // ─── Escala tipográfica Material 3 ────────────────────────────────────────
   static TextTheme _buildTextTheme({required bool isDark}) {
-    final baseColor = isDark ? const Color(0xFFE2E8F8) : const Color(0xFF1A1C2E);
-    final subtleColor = isDark ? const Color(0xFFA8B4D0) : const Color(0xFF44475A);
+    final baseColor = isDark ? const Color(0xFFE0F5EA) : const Color(0xFF1A2B22);
+    final subtleColor = isDark ? const Color(0xFFA8C9B4) : const Color(0xFF3D5248);
 
     return TextTheme(
       // Display — solo para pantallas hero/splash

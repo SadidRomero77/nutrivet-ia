@@ -57,6 +57,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      appBar: AppBar(title: const NutrivetTitle('Iniciar sesión')),
+      bottomNavigationBar: const AppFooter(),
       body: ResponsiveBody(
         formLayout: true,
         child: SingleChildScrollView(
@@ -153,7 +155,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: const Text('¿No tienes cuenta? Regístrate'),
                 ),
 
-                const AppFooter(),
               ],
             ),
           ),

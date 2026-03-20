@@ -91,7 +91,8 @@ class _EditPetScreenState extends ConsumerState<EditPetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Editar mascota')),
+      appBar: AppBar(title: const NutrivetTitle('Editar mascota')),
+      bottomNavigationBar: const AppFooter(),
       body: FutureBuilder<void>(
         future: _initFromPet(),
         builder: (context, snapshot) {
@@ -198,7 +199,6 @@ class _EditPetScreenState extends ConsumerState<EditPetScreen> {
                         : const Text('Guardar cambios'),
                   ),
                 ),
-                const AppFooter(),
               ],
             ),
           ),

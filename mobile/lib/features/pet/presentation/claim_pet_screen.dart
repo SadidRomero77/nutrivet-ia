@@ -77,7 +77,8 @@ class _ClaimPetScreenState extends ConsumerState<ClaimPetScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Vincular mascota clínica')),
+      appBar: AppBar(title: const NutrivetTitle('Vincular mascota clínica')),
+      bottomNavigationBar: const AppFooter(),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -185,7 +186,6 @@ class _ClaimPetScreenState extends ConsumerState<ClaimPetScreen> {
                 ],
               ),
             ),
-            const AppFooter(),
           ],
         ),
       ),

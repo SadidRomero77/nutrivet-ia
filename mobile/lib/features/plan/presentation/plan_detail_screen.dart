@@ -30,7 +30,7 @@ class PlanDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Plan nutricional'),
+        title: const NutrivetTitle('Plan nutricional'),
         actions: [
           planAsync.whenOrNull(
             data: (plan) => plan.isActive
@@ -45,6 +45,7 @@ class PlanDetailScreen extends ConsumerWidget {
               const SizedBox.shrink(),
         ],
       ),
+      bottomNavigationBar: const AppFooter(),
       body: planAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) =>
@@ -242,7 +243,6 @@ class _PlanContent extends StatelessWidget {
             ],
           ),
         ),
-        const AppFooter(),
       ],
     ),
       ),
@@ -413,7 +413,7 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Generar plan — ${widget.petName}')),
+      appBar: AppBar(title: NutrivetTitle('Generar plan — ${widget.petName}')),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

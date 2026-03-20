@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/widgets/app_footer.dart';
 
 class CreateClinicPatientScreen extends ConsumerStatefulWidget {
   const CreateClinicPatientScreen({super.key});
@@ -121,7 +122,8 @@ class _CreateClinicPatientScreenState
     final activityOptions = _species == 'perro' ? _activityDog : _activityCat;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuevo paciente clínico')),
+      appBar: AppBar(title: const NutrivetTitle('Nuevo paciente clínico')),
+      bottomNavigationBar: const AppFooter(),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -372,7 +374,7 @@ class _ClaimCodeSuccess extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Paciente creado')),
+      appBar: AppBar(title: const NutrivetTitle('Paciente creado')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32),

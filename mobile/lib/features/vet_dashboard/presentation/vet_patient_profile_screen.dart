@@ -31,8 +31,8 @@ class VetPatientProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: petAsync.whenOrNull(data: (p) => Text(p.name)) ??
-            const Text('Perfil del paciente'),
+        title: petAsync.whenOrNull(data: (p) => NutrivetTitle(p.name)) ??
+            const NutrivetTitle('Paciente clínico'),
         actions: [
           IconButton(
             icon: const Icon(Icons.auto_awesome),
@@ -45,6 +45,7 @@ class VetPatientProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppFooter(),
       body: petAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error: $err')),
@@ -190,8 +191,6 @@ class _PatientContent extends StatelessWidget {
           title: 'Alimentación actual',
           rows: [_InfoRow('Tipo', pet.currentFeedingType)],
         ),
-
-        const AppFooter(),
       ],
     ),
       ),

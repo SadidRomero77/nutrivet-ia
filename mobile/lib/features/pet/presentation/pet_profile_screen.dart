@@ -34,8 +34,8 @@ class PetProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: petAsync.whenOrNull(data: (p) => Text(p.name)) ??
-            const Text('Perfil de mascota'),
+        title: petAsync.whenOrNull(data: (p) => NutrivetTitle(p.name)) ??
+            const NutrivetTitle('Perfil de mascota'),
         actions: [
           petAsync.whenOrNull(
             data: (pet) => IconButton(
@@ -50,6 +50,7 @@ class PetProfileScreen extends ConsumerWidget {
               const SizedBox.shrink(),
         ],
       ),
+      bottomNavigationBar: const AppFooter(),
       body: petAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error: $err')),
@@ -246,7 +247,6 @@ class _PetProfileContent extends StatelessWidget {
           icon: const Icon(Icons.delete_outline),
           label: const Text('Eliminar mascota'),
         ),
-        const AppFooter(),
       ],
     ),
       ),

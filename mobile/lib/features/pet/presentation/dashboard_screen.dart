@@ -26,7 +26,7 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mis mascotas'),
+        title: const NutrivetTitle('Mis mascotas'),
         actions: [
           // Botón para vincular mascota clínica con código del vet
           IconButton(
@@ -64,6 +64,7 @@ class DashboardScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('Agregar mascota'),
       ),
+      bottomNavigationBar: const AppFooter(),
     );
   }
 }
@@ -92,19 +93,15 @@ class _PetGrid extends StatelessWidget {
                       mainAxisSpacing: 12,
                       childAspectRatio: 2.8,
                     ),
-                    itemCount: pets.length + 1, // +1 para footer
+                    itemCount: pets.length,
                     itemBuilder: (context, i) {
-                      if (i == pets.length) {
-                        return const SizedBox.shrink(); // footer solo en footer extra
-                      }
                       return _PetCard(pet: pets[i]);
                     },
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: pets.length + 1,
+                    itemCount: pets.length,
                     itemBuilder: (context, i) {
-                      if (i == pets.length) return const AppFooter();
                       return _PetCard(pet: pets[i]);
                     },
                   ),
@@ -191,7 +188,6 @@ class _EmptyState extends StatelessWidget {
             ),
           ),
         ),
-        const AppFooter(),
       ],
     );
   }

@@ -35,7 +35,7 @@ class VetDashboardScreen extends ConsumerWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Dashboard Veterinario'),
+          title: const NutrivetTitle('Dashboard Veterinario'),
           actions: [
             IconButton(
               icon: const Icon(Icons.logout),
@@ -69,6 +69,7 @@ class VetDashboardScreen extends ConsumerWidget {
           icon: const Icon(Icons.add),
           label: const Text('Agregar paciente'),
         ),
+        bottomNavigationBar: const AppFooter(),
       ),
     );
   }
@@ -102,9 +103,8 @@ class _PendingPlansTab extends ConsumerWidget {
                   constraints: const BoxConstraints(maxWidth: Breakpoints.maxContentWidth),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: plans.length + 1,
+                    itemCount: plans.length,
                     itemBuilder: (context, i) {
-                      if (i == plans.length) return const AppFooter();
                       return _PendingPlanCard(
                         plan: plans[i],
                         onTap: () => context.push('/vet/plan/${plans[i].planId}'),
@@ -233,9 +233,8 @@ class _PatientsTab extends ConsumerWidget {
                   constraints: const BoxConstraints(maxWidth: Breakpoints.maxContentWidth),
                   child: ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                    itemCount: patients.length + 1,
+                    itemCount: patients.length,
                     itemBuilder: (context, i) {
-                      if (i == patients.length) return const AppFooter();
                       return _PatientCard(
                         pet: patients[i],
                         onTap: () =>

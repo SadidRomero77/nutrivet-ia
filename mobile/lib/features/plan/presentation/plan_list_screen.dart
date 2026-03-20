@@ -28,7 +28,8 @@ class PlanListScreen extends ConsumerWidget {
     final plansAsync = ref.watch(_planListProvider(petId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Planes nutricionales')),
+      appBar: AppBar(title: const NutrivetTitle('Planes nutricionales')),
+      bottomNavigationBar: const AppFooter(),
       body: plansAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error: $err')),
@@ -41,9 +42,8 @@ class PlanListScreen extends ConsumerWidget {
                   constraints: const BoxConstraints(maxWidth: Breakpoints.maxContentWidth),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: plans.length + 1,
+                    itemCount: plans.length,
                     itemBuilder: (context, i) {
-                      if (i == plans.length) return const AppFooter();
                       return _PlanSummaryCard(plan: plans[i]);
                     },
                   ),
