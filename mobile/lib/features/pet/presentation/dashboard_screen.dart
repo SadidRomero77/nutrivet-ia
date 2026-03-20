@@ -7,8 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/utils/responsive.dart';
+import '../../../core/widgets/app_drawer.dart';
 import '../../../core/widgets/app_footer.dart';
-import '../../auth/data/auth_repository.dart';
 import '../data/pet_repository.dart';
 
 part 'dashboard_screen.g.dart';
@@ -27,26 +27,8 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const NutrivetTitle('Mis mascotas'),
-        actions: [
-          // Botón para vincular mascota clínica con código del vet
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner),
-            tooltip: 'Vincular mascota clínica',
-            onPressed: () async {
-              await context.push('/pets/claim');
-              ref.invalidate(petsProvider);
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar sesión',
-            onPressed: () async {
-              await ref.read(authRepositoryProvider).logout();
-              if (context.mounted) context.go('/login');
-            },
-          ),
-        ],
       ),
+      drawer: const AppDrawer(),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(petsProvider),
         child: petsAsync.when(
@@ -58,11 +40,47 @@ class DashboardScreen extends ConsumerWidget {
               : _PetGrid(pets: pets),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const ValueKey('add_pet_fab'),
-        onPressed: () => context.push('/pet/new'),
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar mascota'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Burbuja del agente conversacional
+          FloatingActionButton(
+            key: const ValueKey('chat_fab'),
+            heroTag: 'chat_fab',
+            onPressed: () {
+              final petsVal = ref.read(petsProvider).valueOrNull ?? [];
+              if (petsVal.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Primero registra una mascota')),
+                );
+                return;
+              }
+              if (petsVal.length == 1) {
+                context.push('/chat?petId=${petsVal.first.petId}');
+                return;
+              }
+              showPetPickerSheet(
+                context: context,
+                pets: petsVal,
+                title: 'Consultar sobre...',
+                onPick: (pet) => context.push('/chat?petId=${pet.petId}'),
+              );
+            },
+            backgroundColor: Theme.of(context).colorScheme.tertiary,
+            foregroundColor: Colors.white,
+            tooltip: 'Consultar al agente',
+            child: const Icon(Icons.chat_bubble_outline),
+          ),
+          const SizedBox(height: 12),
+          // Agregar mascota
+          FloatingActionButton.extended(
+            key: const ValueKey('add_pet_fab'),
+            heroTag: 'add_pet_fab',
+            onPressed: () => context.push('/pet/new'),
+            icon: const Icon(Icons.add),
+            label: const Text('Agregar mascota'),
+          ),
+        ],
       ),
       bottomNavigationBar: const AppFooter(),
     );
