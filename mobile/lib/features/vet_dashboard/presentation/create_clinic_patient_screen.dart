@@ -12,6 +12,49 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/widgets/app_footer.dart';
 
+// ── Opciones de dominio ────────────────────────────────────────────────────────
+
+const _medicalConditions = [
+  'Ninguno conocido',
+  'diabético',
+  'hipotiroideo',
+  'cancerígeno',
+  'articular',
+  'renal',
+  'hepático/hiperlipidemia',
+  'pancreático',
+  'neurodegenerativo',
+  'bucal/periodontal',
+  'piel/dermatitis',
+  'gastritis',
+  'cistitis/enfermedad_urinaria',
+  'sobrepeso/obesidad',
+];
+
+const _allergens = [
+  'Pollo',
+  'Res/Vaca',
+  'Cordero',
+  'Pescado/Salmón',
+  'Huevo',
+  'Leche/Lácteos',
+  'Trigo/Gluten',
+  'Soya',
+  'Maíz',
+  'No conozco las alergias',
+];
+
+const _activityLevelsDog = ['sedentario', 'moderado', 'activo', 'muy_activo'];
+const _activityLevelsCat = ['indoor', 'indoor_outdoor', 'outdoor'];
+
+const _sizeLabels = {
+  'mini': 'Mini (1-4 kg)',
+  'pequeño': 'Pequeño (4-9 kg)',
+  'mediano': 'Mediano (9-14 kg)',
+  'grande': 'Grande (14-30 kg)',
+  'gigante': 'Gigante (+30 kg)',
+};
+
 class CreateClinicPatientScreen extends ConsumerStatefulWidget {
   const CreateClinicPatientScreen({super.key});
 
@@ -24,35 +67,24 @@ class _CreateClinicPatientScreenState
     extends ConsumerState<CreateClinicPatientScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Datos del animal
   final _nameCtrl = TextEditingController();
   final _breedCtrl = TextEditingController();
   final _ageCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
+  final _ownerNameCtrl = TextEditingController();
+  final _ownerPhoneCtrl = TextEditingController();
+
   String _species = 'perro';
   String _sex = 'macho';
   String? _size;
   String _reproductiveStatus = 'esterilizado';
   String? _activityLevel;
   int _bcs = 5;
+  final Set<String> _selectedConditions = {};
+  final Set<String> _selectedAllergens = {};
   String _currentDiet = 'concentrado';
-  final List<String> _medicalConditions = [];
-
-  // Datos del propietario
-  final _ownerNameCtrl = TextEditingController();
-  final _ownerPhoneCtrl = TextEditingController();
-
   bool _loading = false;
   String? _claimCode;
-
-  static const _activityDog = ['sedentario', 'moderado', 'activo', 'muy_activo'];
-  static const _activityCat = ['indoor', 'indoor_outdoor', 'outdoor'];
-  static const _conditions = [
-    'diabético', 'hipotiroideo', 'cancerígeno', 'articular', 'renal',
-    'hepático/hiperlipidemia', 'pancreático', 'neurodegenerativo',
-    'bucal/periodontal', 'piel/dermatitis', 'gastritis',
-    'cistitis/enfermedad_urinaria', 'sobrepeso/obesidad',
-  ];
 
   @override
   void dispose() {
@@ -75,6 +107,13 @@ class _CreateClinicPatientScreenState
     }
     setState(() => _loading = true);
 
+    final conditions = _selectedConditions
+        .where((c) => c != 'Ninguno conocido')
+        .toList();
+    final allergies = _selectedAllergens
+        .where((a) => a != 'No conozco las alergias')
+        .toList();
+
     try {
       final dio = ref.read(apiClientProvider);
       final response = await dio.post<Map<String, dynamic>>(
@@ -91,8 +130,8 @@ class _CreateClinicPatientScreenState
             'reproductive_status': _reproductiveStatus,
             'activity_level': _activityLevel,
             'bcs': _bcs,
-            'medical_conditions': _medicalConditions,
-            'allergies': <String>[],
+            'medical_conditions': conditions,
+            'allergies': allergies,
             'current_diet': _currentDiet,
           },
           if (_ownerNameCtrl.text.trim().isNotEmpty)
@@ -115,11 +154,66 @@ class _CreateClinicPatientScreenState
     }
   }
 
+  void _onAllergenChanged(String allergen, bool selected) {
+    setState(() {
+      if (selected) {
+        if (allergen == 'No conozco las alergias') {
+          _selectedAllergens
+            ..clear()
+            ..add(allergen);
+          _showAllergenAlert();
+        } else {
+          _selectedAllergens
+            ..remove('No conozco las alergias')
+            ..add(allergen);
+        }
+      } else {
+        _selectedAllergens.remove(allergen);
+      }
+    });
+  }
+
+  void _showAllergenAlert() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(
+          Icons.warning_amber_rounded,
+          color: Colors.orange,
+          size: 40,
+        ),
+        title: const Text('Prueba de alergenos recomendada'),
+        content: const Text(
+          'Sin conocer las alergias del paciente, el plan nutricional '
+          'podría incluir ingredientes que causen reacciones adversas.\n\n'
+          'Se recomienda realizar una prueba de alergenos antes de iniciar '
+          'el plan nutricional.',
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(
+                  () => _selectedAllergens.remove('No conozco las alergias'));
+            },
+            child: const Text('Volver'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Continuar bajo mi responsabilidad'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_claimCode != null) return _ClaimCodeSuccess(code: _claimCode!);
 
-    final activityOptions = _species == 'perro' ? _activityDog : _activityCat;
+    final theme = Theme.of(context);
+    final activityOptions =
+        _species == 'perro' ? _activityLevelsDog : _activityLevelsCat;
 
     return Scaffold(
       appBar: AppBar(title: const NutrivetTitle('Nuevo paciente clínico')),
@@ -129,14 +223,14 @@ class _CreateClinicPatientScreenState
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            _SectionHeader(title: 'Datos del animal'),
+            // ── Datos básicos ─────────────────────────────────────────────────
+            _SectionHeader(title: 'Datos básicos'),
 
-            // Especie
             Row(
               children: [
                 Expanded(
                   child: _SpeciesCard(
-                    label: 'Perro',
+                    label: 'Canino',
                     emoji: '🐕',
                     selected: _species == 'perro',
                     onTap: () => setState(() {
@@ -149,7 +243,7 @@ class _CreateClinicPatientScreenState
                 const SizedBox(width: 12),
                 Expanded(
                   child: _SpeciesCard(
-                    label: 'Gato',
+                    label: 'Felino',
                     emoji: '🐈',
                     selected: _species == 'gato',
                     onTap: () => setState(() {
@@ -165,55 +259,28 @@ class _CreateClinicPatientScreenState
 
             TextFormField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Nombre del animal *'),
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Nombre del animal *',
+                prefixIcon: Icon(Icons.pets_outlined),
+              ),
               validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
+                  (v == null || v.trim().isEmpty) ? 'Requerido' : null,
             ),
             const SizedBox(height: 12),
 
             TextFormField(
               controller: _breedCtrl,
-              decoration: const InputDecoration(labelText: 'Raza *'),
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Raza *',
+                prefixIcon: Icon(Icons.search),
+              ),
               validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
+                  (v == null || v.trim().isEmpty) ? 'Requerido' : null,
             ),
             const SizedBox(height: 12),
 
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _ageCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Edad (meses) *',
-                      suffixText: 'meses',
-                    ),
-                    validator: (v) =>
-                        (int.tryParse(v ?? '') == null) ? 'Edad inválida' : null,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _weightCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Peso (kg) *',
-                      suffixText: 'kg',
-                    ),
-                    validator: (v) {
-                      final n = double.tryParse(v ?? '');
-                      return (n == null || n <= 0) ? 'Peso inválido' : null;
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Sexo
             DropdownButtonFormField<String>(
               value: _sex,
               decoration: const InputDecoration(labelText: 'Sexo *'),
@@ -223,26 +290,65 @@ class _CreateClinicPatientScreenState
               ],
               onChanged: (v) => setState(() => _sex = v!),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
 
-            // Talla (solo perros)
+            // ── Medidas ───────────────────────────────────────────────────────
+            _SectionHeader(title: 'Medidas'),
+
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _ageCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Edad *',
+                      suffixText: 'meses',
+                    ),
+                    validator: (v) {
+                      final n = int.tryParse(v ?? '');
+                      if (n == null || n <= 0) return 'Inválida';
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _weightCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Peso *',
+                      suffixText: 'kg',
+                    ),
+                    validator: (v) {
+                      final n = double.tryParse(v ?? '');
+                      if (n == null || n <= 0) return 'Inválido';
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
             if (_species == 'perro') ...[
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _size,
                 decoration: const InputDecoration(labelText: 'Talla'),
-                items: const [
-                  DropdownMenuItem(value: 'mini', child: Text('Mini (1-4 kg)')),
-                  DropdownMenuItem(value: 'pequeño', child: Text('Pequeño (4-9 kg)')),
-                  DropdownMenuItem(value: 'mediano', child: Text('Mediano (9-14 kg)')),
-                  DropdownMenuItem(value: 'grande', child: Text('Grande (14-30 kg)')),
-                  DropdownMenuItem(value: 'gigante', child: Text('Gigante (+30 kg)')),
-                ],
+                items: _sizeLabels.entries
+                    .map((e) =>
+                        DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
                 onChanged: (v) => setState(() => _size = v),
+                validator: (v) => v == null ? 'Selecciona talla' : null,
               ),
-              const SizedBox(height: 12),
             ],
+            const SizedBox(height: 24),
 
-            // Estado reproductivo
+            // ── Condición física ──────────────────────────────────────────────
+            _SectionHeader(title: 'Condición física'),
+
             DropdownButtonFormField<String>(
               value: _reproductiveStatus,
               decoration:
@@ -251,29 +357,28 @@ class _CreateClinicPatientScreenState
                 DropdownMenuItem(
                     value: 'esterilizado', child: Text('Esterilizado/a')),
                 DropdownMenuItem(
-                    value: 'no esterilizado',
-                    child: Text('No esterilizado/a')),
+                    value: 'no_esterilizado', child: Text('No esterilizado/a')),
               ],
               onChanged: (v) => setState(() => _reproductiveStatus = v!),
             ),
-            const SizedBox(height: 12),
-
-            // Nivel de actividad
-            DropdownButtonFormField<String>(
-              value: _activityLevel,
-              decoration:
-                  const InputDecoration(labelText: 'Nivel de actividad *'),
-              items: activityOptions
-                  .map((l) => DropdownMenuItem(value: l, child: Text(l)))
-                  .toList(),
-              onChanged: (v) => setState(() => _activityLevel = v),
-            ),
             const SizedBox(height: 16),
 
-            // BCS
+            Text('Nivel de actividad *', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            ...activityOptions.map(
+              (level) => RadioListTile<String>(
+                title: Text(level),
+                value: level,
+                groupValue: _activityLevel,
+                onChanged: (v) => setState(() => _activityLevel = v),
+                dense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+
             Text(
               'BCS — Body Condition Score: $_bcs / 9',
-              style: Theme.of(context).textTheme.titleSmall,
+              style: theme.textTheme.titleSmall,
             ),
             Slider(
               value: _bcs.toDouble(),
@@ -283,61 +388,97 @@ class _CreateClinicPatientScreenState
               label: _bcs.toString(),
               onChanged: (v) => setState(() => _bcs = v.round()),
             ),
-            const SizedBox(height: 12),
-
-            // Dieta actual
-            DropdownButtonFormField<String>(
-              value: _currentDiet,
-              decoration:
-                  const InputDecoration(labelText: 'Alimentación actual *'),
-              items: const [
-                DropdownMenuItem(
-                    value: 'concentrado', child: Text('Concentrado')),
-                DropdownMenuItem(value: 'natural', child: Text('Natural/BARF')),
-                DropdownMenuItem(value: 'mixto', child: Text('Mixto')),
-              ],
-              onChanged: (v) => setState(() => _currentDiet = v!),
-            ),
-            const SizedBox(height: 16),
-
-            // Condiciones médicas
             Text(
-              'Condiciones médicas',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: _conditions
-                  .map(
-                    (c) => FilterChip(
-                      label: Text(c, style: const TextStyle(fontSize: 12)),
-                      selected: _medicalConditions.contains(c),
-                      onSelected: (sel) => setState(() {
-                        if (sel) {
-                          _medicalConditions.add(c);
-                        } else {
-                          _medicalConditions.remove(c); // ignore: avoid_dynamic_calls
-                        }
-                      }),
-                    ),
-                  )
-                  .toList(),
+              _bcs <= 3
+                  ? 'Bajo peso — se usará fase de aumento'
+                  : _bcs >= 7
+                      ? 'Sobrepeso — se usará fase de reducción'
+                      : 'Peso ideal — se usará fase de mantenimiento',
+              style: TextStyle(
+                fontSize: 12,
+                color: _bcs <= 3
+                    ? Colors.orange
+                    : _bcs >= 7
+                        ? Colors.red
+                        : Colors.green,
+              ),
             ),
             const SizedBox(height: 24),
 
+            // ── Historial médico ──────────────────────────────────────────────
+            _SectionHeader(title: 'Historial médico'),
+
+            Text('Condiciones médicas', style: theme.textTheme.titleSmall),
+            ..._medicalConditions.map(
+              (cond) => CheckboxListTile(
+                title: Text(cond),
+                value: _selectedConditions.contains(cond),
+                dense: true,
+                onChanged: (v) => setState(() {
+                  if (v == true) {
+                    if (cond == 'Ninguno conocido') {
+                      _selectedConditions
+                        ..clear()
+                        ..add(cond);
+                    } else {
+                      _selectedConditions
+                        ..remove('Ninguno conocido')
+                        ..add(cond);
+                    }
+                  } else {
+                    _selectedConditions.remove(cond);
+                  }
+                }),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Text('Alergias / intolerancias', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            ..._allergens.map(
+              (allergen) => CheckboxListTile(
+                title: Text(allergen),
+                value: _selectedAllergens.contains(allergen),
+                dense: true,
+                onChanged: (v) => _onAllergenChanged(allergen, v ?? false),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Alimentación actual ───────────────────────────────────────────
+            _SectionHeader(title: 'Alimentación actual'),
+
+            for (final option in ['concentrado', 'natural', 'mixto'])
+              RadioListTile<String>(
+                title: Text(option == 'natural'
+                    ? 'Natural/BARF'
+                    : option[0].toUpperCase() + option.substring(1)),
+                value: option,
+                groupValue: _currentDiet,
+                onChanged: (v) => setState(() => _currentDiet = v!),
+                dense: true,
+              ),
+            const SizedBox(height: 24),
+
+            // ── Datos del propietario ─────────────────────────────────────────
             _SectionHeader(title: 'Datos del propietario (opcional)'),
+
             TextFormField(
               controller: _ownerNameCtrl,
-              decoration:
-                  const InputDecoration(labelText: 'Nombre del propietario'),
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Nombre del propietario',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _ownerPhoneCtrl,
               keyboardType: TextInputType.phone,
-              decoration:
-                  const InputDecoration(labelText: 'Teléfono del propietario'),
+              decoration: const InputDecoration(
+                labelText: 'Teléfono del propietario',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
             ),
             const SizedBox(height: 32),
 
@@ -436,6 +577,8 @@ class _ClaimCodeSuccess extends StatelessWidget {
   }
 }
 
+// ── Widgets compartidos ───────────────────────────────────────────────────────
+
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title});
 
@@ -486,21 +629,22 @@ class _SpeciesCard extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(8),
           color: selected
-              ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+              ? theme.colorScheme.primaryContainer.withAlpha(80)
               : null,
         ),
         child: Column(
           children: [
             Text(emoji, style: const TextStyle(fontSize: 28)),
             const SizedBox(height: 4),
-            Text(label,
-                style: TextStyle(
-                  fontWeight:
-                      selected ? FontWeight.bold : FontWeight.normal,
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface,
-                )),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface,
+              ),
+            ),
           ],
         ),
       ),

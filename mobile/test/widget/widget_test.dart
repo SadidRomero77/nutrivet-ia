@@ -83,11 +83,11 @@ void main() {
       expect(find.byKey(const ValueKey('register_button')), findsOneWidget);
     });
 
-    testWidgets('PetWizardScreen — paso 1 visible con campos clave', (tester) async {
+    testWidgets('PetWizardScreen — campos clave visibles en formulario único', (tester) async {
       await tester.pumpWidget(_app(const PetWizardScreen()));
       expect(find.byKey(const ValueKey('pet_name_field')), findsOneWidget);
       expect(find.byKey(const ValueKey('species_dropdown')), findsOneWidget);
-      expect(find.byKey(const ValueKey('next_button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('age_field')), findsOneWidget);
     });
 
     testWidgets('ScannerScreen — aviso REGLA 7 visible', (tester) async {
