@@ -25,7 +25,16 @@ from backend.domain.nutrition.nrc_calculator import NRCCalculator
 from backend.domain.safety.food_safety_checker import FoodSafetyChecker
 from backend.domain.safety.medical_restriction_engine import MedicalRestrictionEngine
 from backend.domain.value_objects.bcs import BCS
+from backend.infrastructure.agent.prompts.plan_generation_prompts import (
+    build_plan_system_prompt,
+    build_plan_user_prompt,
+)
 from backend.infrastructure.agent.state import NutriVetState
+from backend.infrastructure.agent.validators.json_repair import safe_parse_plan_json
+from backend.infrastructure.agent.validators.nutritional_validator import (
+    enrich_plan_with_validation,
+    validate_nutritional_plan,
+)
 from backend.infrastructure.llm.openrouter_client import OpenRouterClient
 
 
@@ -121,59 +130,45 @@ def nodo_5_select_llm(state: NutriVetState) -> NutriVetState:
 
 # ─── Nodo 6: generate_with_llm ────────────────────────────────────────────────
 
-def _build_system_prompt(restrictions: list[str], allergies: list[str]) -> str:
-    """Construye system prompt con restricciones (REGLA 6: sin PII)."""
-    base = (
-        "Eres un nutricionista veterinario especializado en alimentación de perros y gatos. "
-        "Genera un plan nutricional estructurado en JSON con 5 secciones: "
-        "perfil_nutricional, ingredientes, porciones, instrucciones_preparacion, transicion_dieta. "
-        "Solo usa ingredientes disponibles en LATAM en español. "
-        "NO incluyas ningún dato personal del dueño ni nombre de la mascota. "
-        "Responde SOLO con JSON válido."
-    )
-    combined = restrictions + allergies
-    if combined:
-        restriction_text = "; ".join(combined[:10])
-        base += f"\n\nRESTRICCIONES (no negociables): {restriction_text}"
-    return base
-
-
-def _build_user_prompt(
-    species: str,
-    weight_kg: float,
-    rer_kcal: float,
-    der_kcal: float,
-    modality: str,
-    bcs_phase: str,
-) -> str:
-    """Construye user prompt sin PII (REGLA 6)."""
-    return (
-        f"Especie: {species}. Peso: {weight_kg} kg. "
-        f"RER: {rer_kcal:.1f} kcal/día. DER: {der_kcal:.1f} kcal/día. "
-        f"Modalidad: {modality}. Fase de peso: {bcs_phase}. "
-        "Genera el plan nutricional completo en JSON con las 5 secciones indicadas."
-    )
-
-
 async def nodo_6_generate_with_llm(
     state: NutriVetState,
     llm_client: OpenRouterClient | None = None,
 ) -> NutriVetState:
-    """Genera el plan nutricional con el LLM seleccionado (REGLA 5)."""
+    """
+    Genera el plan nutricional con el LLM seleccionado (REGLA 5).
+
+    Usa prompts expertos con conocimiento NRC/AAFCO embebido, tablas nutricionales
+    LATAM, protocolos por condición y guardarraíles anti-alucinación.
+    """
     client = llm_client or OpenRouterClient()
     pet = state["pet_profile"]
+    conditions = pet.get("medical_conditions", [])
+    species = pet["species"]
+    modality = state.get("modality", "natural")
 
-    system_prompt = _build_system_prompt(
-        state.get("medical_restrictions", []),
-        state.get("allergy_list", []),
+    system_prompt = build_plan_system_prompt(
+        conditions=conditions,
+        species=species,
+        modality=modality,
     )
-    user_prompt = _build_user_prompt(
-        species=pet["species"],
+    user_prompt = build_plan_user_prompt(
+        species=species,
+        age_months=pet.get("age_months", 12),
         weight_kg=pet["weight_kg"],
+        breed=pet.get("breed", "raza no especificada"),
+        size=pet.get("size", "no especificado"),
+        sex=pet.get("sex", "no especificado"),
+        reproductive_status=pet.get("reproductive_status", "no especificado"),
+        activity_level=pet.get("activity_level", "moderado"),
+        bcs=pet.get("bcs", 5),
+        bcs_phase=state["bcs_phase"],
+        conditions=conditions,
+        allergies=state.get("allergy_list", []),
+        current_diet=pet.get("current_diet", "concentrado"),
+        modality=modality,
         rer_kcal=state["rer_kcal"],
         der_kcal=state["der_kcal"],
-        modality=state.get("modality", "natural"),
-        bcs_phase=state["bcs_phase"],
+        medical_restrictions=state.get("medical_restrictions", []),
     )
 
     response = await client.generate(
@@ -198,18 +193,26 @@ async def nodo_6_generate_with_llm(
 
 def nodo_7_validate_output(state: NutriVetState) -> NutriVetState:
     """
-    Valida el output del LLM con FoodSafetyChecker (REGLA 1 — post-LLM).
-    Si hay ingrediente tóxico → levanta ValueError (job → FAILED).
+    Valida el output del LLM en 3 capas (REGLA 1 — post-LLM):
+    1. JSON repair + parsing robusto (extrae JSON aunque venga con markdown)
+    2. FoodSafetyChecker — bloquea si hay ingredientes tóxicos
+    3. NutritionalValidator — verifica coherencia calórica, proteína mínima, Ca:P ratio,
+       restricciones médicas, fósforo en ERC, grasa en pancreatitis, taurina en gatos
+
+    Blocking errors → ValueError (job FAILED).
+    Warnings → se añaden a notas_clinicas del plan.
     """
     raw = state.get("llm_response_content", "")
     pet = state["pet_profile"]
     species = pet.get("species", "perro")
+    conditions = pet.get("medical_conditions", [])
+    allergies = state.get("allergy_list", [])
+    medical_restrictions = state.get("medical_restrictions", [])
 
-    try:
-        plan_content: dict[str, Any] = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"LLM retornó JSON inválido: {e}") from e
+    # Capa 1: parseo robusto con JSON repair
+    plan_content: dict[str, Any] = safe_parse_plan_json(raw, der_kcal=state["der_kcal"])
 
+    # Capa 2: toxicidad con FoodSafetyChecker (REGLA 1)
     ingredients_raw: list[str] = []
     ing = plan_content.get("ingredientes")
     if isinstance(ing, list):
@@ -225,6 +228,27 @@ def nodo_7_validate_output(state: NutriVetState) -> NutriVetState:
         raise ValueError(
             f"Plan rechazado: ingredientes tóxicos detectados: {toxic_found}"
         )
+
+    # Capa 3: validación nutricional completa (NRC + coherencia calórica + condiciones)
+    validation_result = validate_nutritional_plan(
+        plan_content=plan_content,
+        species=species,
+        conditions=conditions,
+        der_kcal=state["der_kcal"],
+        rer_kcal=state["rer_kcal"],
+        allergies=allergies,
+        medical_restrictions=medical_restrictions,
+        age_months=pet.get("age_months", 12),
+    )
+
+    if validation_result.blocking_errors:
+        raise ValueError(
+            f"Plan rechazado por validación nutricional: "
+            + " | ".join(validation_result.blocking_errors)
+        )
+
+    # Enriquecer plan con warnings como notas_clinicas
+    plan_content = enrich_plan_with_validation(plan_content, validation_result)
 
     return {**state, "plan_content": plan_content}
 

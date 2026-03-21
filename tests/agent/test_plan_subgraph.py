@@ -160,9 +160,27 @@ class TestValidateOutput:
         ingredients: list[str],
         species: str = "perro",
     ) -> NutriVetState:
-        content = json.dumps({"ingredientes": ingredients, "porciones": {}})
+        content = json.dumps({
+            "perfil_nutricional": {
+                "rer_kcal": 396.0, "der_kcal": 534.0,
+                "proteina_pct_ms": 28.0, "grasa_pct_ms": 12.0, "fibra_pct_ms": 5.0,
+                "calcio_g_dia": 1.2, "fosforo_g_dia": 0.9, "sodio_mg_dia": 300,
+                "omega3_mg_dia": 500, "racion_total_g_dia": 320.0, "kcal_verificadas": 530.0,
+            },
+            "ingredientes": [
+                {"nombre": ing, "cantidad_g": 100, "kcal": 165, "proteina_g": 20, "grasa_g": 5,
+                 "fuente": "animal", "frecuencia": "diario"}
+                for ing in ingredients
+            ],
+            "porciones": {"total_g_dia": 320.0, "numero_comidas": 2, "g_por_comida": 160.0},
+            "instrucciones_preparacion": {"metodo": "cocción", "pasos": ["Hervir ingredientes"]},
+            "transicion_dieta": {"requiere_transicion": True, "duracion_dias": 10, "fases": []},
+        })
         state = _state_with_pet(species=species)
         state["llm_response_content"] = content
+        state["rer_kcal"] = 396.0
+        state["der_kcal"] = 534.0
+        state["bcs_phase"] = "mantenimiento"
         return state
 
     def test_plan_valida_output_post_llm_rechaza_toxicos(self) -> None:
@@ -187,7 +205,10 @@ class TestValidateOutput:
         """JSON inválido del LLM → ValueError."""
         state = _state_with_pet()
         state["llm_response_content"] = "esto no es JSON"
-        with pytest.raises(ValueError, match="JSON inválido"):
+        state["rer_kcal"] = 396.0
+        state["der_kcal"] = 534.0
+        state["bcs_phase"] = "mantenimiento"
+        with pytest.raises(ValueError):
             nodo_7_validate_output(state)
 
 

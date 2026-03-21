@@ -18,7 +18,6 @@ Constitution REGLAS activas: 1 (toxicidad), 2 (restricciones), 3 (RER/DER), 4 (H
 """
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime
 from typing import Any
@@ -36,40 +35,16 @@ from backend.domain.nutrition.nrc_calculator import NRCCalculator
 from backend.domain.safety.food_safety_checker import FoodSafetyChecker
 from backend.domain.safety.medical_restriction_engine import MedicalRestrictionEngine
 from backend.domain.value_objects.bcs import BCS, BCSPhase
+from backend.infrastructure.agent.prompts.plan_generation_prompts import (
+    build_plan_system_prompt,
+    build_plan_user_prompt,
+)
+from backend.infrastructure.agent.validators.json_repair import safe_parse_plan_json
+from backend.infrastructure.agent.validators.nutritional_validator import (
+    enrich_plan_with_validation,
+    validate_nutritional_plan,
+)
 from backend.infrastructure.llm.openrouter_client import OpenRouterClient
-
-
-def _build_system_prompt(restrictions: list[str]) -> str:
-    """Construye el system prompt con restricciones médicas hard-coded."""
-    base = (
-        "Eres un nutricionista veterinario especializado en alimentación de perros y gatos. "
-        "Genera un plan nutricional estructurado en JSON con 5 secciones: "
-        "perfil_nutricional, ingredientes, porciones, instrucciones_preparacion, transicion_dieta. "
-        "Solo usa ingredientes disponibles en LATAM en español. "
-        "NO incluyas ningún dato personal del dueño ni nombre de la mascota. "
-        "Responde SOLO con JSON válido."
-    )
-    if restrictions:
-        restriction_text = "; ".join(restrictions[:10])  # Límite de seguridad
-        base += f"\n\nRESTRICCIONES MÉDICAS (no negociables): {restriction_text}"
-    return base
-
-
-def _build_user_prompt(
-    species: str,
-    weight_kg: float,
-    rer_kcal: float,
-    der_kcal: float,
-    modality: str,
-    bcs_phase: str,
-) -> str:
-    """Construye el user prompt sin PII (solo IDs y datos nutricionales)."""
-    return (
-        f"Especie: {species}. Peso: {weight_kg} kg. "
-        f"RER: {rer_kcal:.1f} kcal/día. DER: {der_kcal:.1f} kcal/día. "
-        f"Modalidad: {modality}. Fase de peso: {bcs_phase}. "
-        "Genera el plan nutricional completo en JSON con las 5 secciones indicadas."
-    )
 
 
 class PlanGenerationWorker:
@@ -152,15 +127,30 @@ class PlanGenerationWorker:
             conditions_count=len(conditions),
         )
 
-        # --- Paso 6: Generar plan con LLM ---
-        system_prompt = _build_system_prompt(forbidden_ingredients + allergy_list)
-        user_prompt = _build_user_prompt(
+        # --- Paso 6: Generar plan con LLM (prompts expertos NRC/AAFCO + condiciones) ---
+        system_prompt = build_plan_system_prompt(
+            conditions=conditions,
             species=pet.species.value,
+            modality=job.modality,
+        )
+        user_prompt = build_plan_user_prompt(
+            species=pet.species.value,
+            age_months=pet.age_months,
             weight_kg=pet.weight_kg,
+            breed=getattr(pet, "breed", "raza no especificada"),
+            size=getattr(pet, "size", "no especificado"),
+            sex=pet.sex.value if hasattr(pet.sex, "value") else str(getattr(pet, "sex", "")),
+            reproductive_status=pet.reproductive_status.value,
+            activity_level=pet.activity_level.value,
+            bcs=pet.bcs.value,
+            bcs_phase=bcs_phase.value,
+            conditions=conditions,
+            allergies=allergy_list,
+            current_diet=pet.current_diet.value if hasattr(pet.current_diet, "value") else str(getattr(pet, "current_diet", "concentrado")),
+            modality=job.modality,
             rer_kcal=rer,
             der_kcal=der,
-            modality=job.modality,
-            bcs_phase=bcs_phase.value,
+            medical_restrictions=forbidden_ingredients,
         )
         llm_response = await self._llm_client.generate(
             model=model,
@@ -168,22 +158,20 @@ class PlanGenerationWorker:
             user_prompt=user_prompt,
         )
 
-        # --- Paso 7: Validar output con FoodSafetyChecker (post-LLM — REGLA 1) ---
-        try:
-            plan_content = json.loads(llm_response.content)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"LLM retornó JSON inválido: {e}") from e
+        # --- Paso 7: Validación en 3 capas (REGLA 1 + coherencia NRC) ---
 
-        # Extraer ingredientes del contenido generado para validar toxicidad
+        # Capa 1: JSON repair + parsing robusto
+        plan_content = safe_parse_plan_json(llm_response.content, der_kcal=der)
+
+        # Capa 2: FoodSafetyChecker — toxicidad (REGLA 1)
         ingredients_raw: list[str] = []
-        if "ingredientes" in plan_content:
-            ing = plan_content["ingredientes"]
-            if isinstance(ing, list):
-                ingredients_raw = [
-                    i["nombre"] if isinstance(i, dict) else str(i) for i in ing
-                ]
-            elif isinstance(ing, dict):
-                ingredients_raw = list(ing.keys())
+        ing = plan_content.get("ingredientes", [])
+        if isinstance(ing, list):
+            ingredients_raw = [
+                i["nombre"] if isinstance(i, dict) else str(i) for i in ing
+            ]
+        elif isinstance(ing, dict):
+            ingredients_raw = list(ing.keys())
 
         toxicity_results = FoodSafetyChecker.validate_plan_ingredients(
             ingredients=ingredients_raw,
@@ -192,15 +180,31 @@ class PlanGenerationWorker:
         toxic_found = [r.ingredient for r in toxicity_results if r.is_toxic]
         if toxic_found:
             raise ValueError(
-                f"Plan rechazado: ingredientes tóxicos detectados: "
-                f"{toxic_found}"
+                f"Plan rechazado: ingredientes tóxicos detectados: {toxic_found}"
             )
 
+        # Capa 3: validación nutricional NRC (proteína, Ca:P, grasa, restricciones)
+        validation_result = validate_nutritional_plan(
+            plan_content=plan_content,
+            species=pet.species.value,
+            conditions=conditions,
+            der_kcal=der,
+            rer_kcal=rer,
+            allergies=allergy_list,
+            medical_restrictions=forbidden_ingredients,
+            age_months=pet.age_months,
+        )
+        if validation_result.blocking_errors:
+            raise ValueError(
+                "Plan rechazado por validación nutricional: "
+                + " | ".join(validation_result.blocking_errors)
+            )
+        plan_content = enrich_plan_with_validation(plan_content, validation_result)
+
         # --- Paso 8: Generar substitute_set ---
-        # Los sustitutos son los ingredientes del plan que NO están en forbidden ni tóxicos
         substitute_set = [
-            ing for ing in ingredients_raw
-            if ing.lower() not in [f.lower() for f in forbidden_ingredients]
+            ing_name for ing_name in ingredients_raw
+            if ing_name.lower() not in [f.lower() for f in forbidden_ingredients]
         ]
 
         # --- Paso 9: Determinar HITL (REGLA 4) ---
