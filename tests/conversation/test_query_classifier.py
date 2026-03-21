@@ -65,15 +65,15 @@ class TestQueryClassifier:
         assert result == INTENT_MEDICAL
 
     @pytest.mark.asyncio
-    async def test_default_nutricional_si_llm_falla(self) -> None:
-        """Si el LLM falla → NUTRITIONAL por defecto (comportamiento seguro)."""
+    async def test_default_medical_si_llm_falla(self) -> None:
+        """Si el LLM falla → MEDICAL por defecto (REGLA 9: ante la duda, remite al vet)."""
         with patch(
             "backend.infrastructure.agent.nodes.query_classifier._call_classifier_llm",
             new_callable=AsyncMock,
             side_effect=Exception("LLM timeout"),
         ):
             result = await classify_query("¿qué le doy de comer?")
-        assert result == INTENT_NUTRITIONAL
+        assert result == INTENT_MEDICAL
 
     def test_constantes_son_strings_distintos(self) -> None:
         """Los tres intents son strings distintos."""

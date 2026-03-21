@@ -69,6 +69,7 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
   final _breedCtrl = TextEditingController();
   final _ageCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
+  final _customAllergyCtrl = TextEditingController();
 
   String _species = 'perro';
   String _sex = 'macho';
@@ -87,6 +88,7 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
     _breedCtrl.dispose();
     _ageCtrl.dispose();
     _weightCtrl.dispose();
+    _customAllergyCtrl.dispose();
     super.dispose();
   }
 
@@ -103,9 +105,14 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
     final conditions = _selectedConditions
         .where((c) => c != 'Ninguno conocido')
         .toList();
-    final allergies = _selectedAllergens
-        .where((a) => a != 'No conozco las alergias')
-        .toList();
+    final allergies = [
+      ..._selectedAllergens.where((a) => a != 'No conozco las alergias'),
+      // Agregar alergias personalizadas (separadas por coma)
+      ..._customAllergyCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty),
+    ];
 
     try {
       await ref.read(petRepositoryProvider).createPet({
@@ -128,7 +135,13 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e')),
+          SnackBar(
+            content: Text(
+              e.toString().contains('Exception:')
+                  ? e.toString().replaceFirst('Exception: ', '')
+                  : 'Error al guardar el perfil. Intenta de nuevo.',
+            ),
+          ),
         );
       }
     } finally {
@@ -426,6 +439,15 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
                 value: _selectedAllergens.contains(allergen),
                 dense: true,
                 onChanged: (v) => _onAllergenChanged(allergen, v ?? false),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _customAllergyCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Otra alergia (opcional)',
+                hintText: 'Ej: Pavo, Quinoa — separa con coma',
+                prefixIcon: Icon(Icons.add_circle_outline),
               ),
             ),
             const SizedBox(height: 24),

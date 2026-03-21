@@ -62,10 +62,12 @@ class PlanDetailScreen extends ConsumerWidget {
   ) async {
     try {
       await ref.read(planRepositoryProvider).exportAndShare(planId);
-    } catch (e) {
+    } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al exportar: $e')),
+          const SnackBar(
+            content: Text('Error al exportar el plan. Intenta de nuevo.'),
+          ),
         );
       }
     }
@@ -389,7 +391,7 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
       if (job.isFailed) {
         setState(() {
           _loading = false;
-          _statusMsg = 'Error al generar el plan: ${job.errorMessage ?? "error desconocido"}';
+          _statusMsg = 'No fue posible generar el plan. Intenta de nuevo o contacta soporte.';
         });
         return;
       }

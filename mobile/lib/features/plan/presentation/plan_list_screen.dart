@@ -41,9 +41,24 @@ class PlanListScreen extends ConsumerWidget {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: Breakpoints.maxContentWidth),
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: plans.length,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    itemCount: plans.length + 1, // +1 para disclaimer al final
                     itemBuilder: (context, i) {
+                      if (i == plans.length) {
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 8, bottom: 16),
+                          child: Text(
+                            'NutriVet.IA es asesoría nutricional digital — '
+                            'no reemplaza el diagnóstico médico veterinario.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        );
+                      }
                       return _PlanSummaryCard(plan: plans[i]);
                     },
                   ),

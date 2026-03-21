@@ -4,7 +4,7 @@ QueryClassifier — Nodo de clasificación de intención de consulta.
 Clasifica: NUTRITIONAL / MEDICAL / EMERGENCY
 - EMERGENCY: determinístico por keywords (sin LLM) — < 1ms
 - MEDICAL / NUTRITIONAL: LLM (llama-3.3-70b via OpenRouter)
-- Default si LLM falla: NUTRITIONAL (comportamiento seguro)
+- Default si LLM falla: MEDICAL (comportamiento seguro — REGLA 9: remite al vet)
 
 Constitution REGLA 9: consultas médicas → remite al vet, nunca responde.
 """
@@ -80,7 +80,7 @@ async def classify_query(message: str, llm_client=None) -> str:
     Orden de evaluación:
     1. Keywords de emergencia → EMERGENCY (determinístico, sin LLM)
     2. LLM classifier → MEDICAL o NUTRITIONAL
-    3. Si LLM falla → NUTRITIONAL (default seguro)
+    3. Si LLM falla → MEDICAL (default seguro — ante la duda, remite al vet)
 
     Args:
         message: Mensaje del usuario en lenguaje natural.
@@ -99,5 +99,5 @@ async def classify_query(message: str, llm_client=None) -> str:
     try:
         return await _call_classifier_llm(message, llm_client=llm_client)
     except Exception:
-        logger.warning("LLM classifier falló — usando NUTRITIONAL como default seguro")
-        return INTENT_NUTRITIONAL
+        logger.exception("LLM classifier falló — asumiendo REFERRAL por seguridad (REGLA 9)")
+        return INTENT_MEDICAL  # Default seguro: consulta médica → remite al vet

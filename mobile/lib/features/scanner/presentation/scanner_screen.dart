@@ -64,7 +64,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
       );
       setState(() => _result = response.data);
     } catch (e) {
-      setState(() => _error = 'Error al analizar la imagen: $e');
+      setState(() => _error = 'Error al analizar la imagen. Asegúrate de enviar solo tabla nutricional o lista de ingredientes.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

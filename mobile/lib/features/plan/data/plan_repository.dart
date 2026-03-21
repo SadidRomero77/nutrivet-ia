@@ -1,8 +1,9 @@
-/// Repositorio de planes nutricionales — lectura y exportación a PDF.
+/// Repositorio de planes nutricionales — lectura, exportación y cache offline.
 library;
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -265,6 +266,9 @@ class PlanRepository {
 
   final Dio dio;
 
+  static const _summaryBoxName = 'plan_summaries';
+  static const _detailBoxName = 'plan_details';
+
   /// Encola la generación de un plan. Retorna job para polling.
   Future<PlanJob> generatePlan({
     required String petId,
@@ -285,19 +289,54 @@ class PlanRepository {
     return PlanJob.fromJson(response.data!);
   }
 
-  /// Lista resúmenes de planes del owner autenticado.
+  /// Lista resúmenes de planes. Usa cache Hive si sin red.
   Future<List<PlanSummary>> listPlans() async {
-    final response = await dio.get<List<dynamic>>('/v1/plans');
-    return (response.data!)
-        .map((e) => PlanSummary.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final box = await Hive.openBox<Map>(_summaryBoxName);
+    try {
+      final response = await dio.get<List<dynamic>>('/v1/plans');
+      final plans = (response.data!)
+          .map((e) => PlanSummary.fromJson(e as Map<String, dynamic>))
+          .toList();
+      // Actualizar cache local
+      await box.clear();
+      for (final plan in plans) {
+        await box.put(plan.planId, {
+          'plan_id': plan.planId,
+          'pet_id': plan.petId,
+          'status': plan.status,
+          'modality': plan.modality,
+          'rer_kcal': plan.rerKcal,
+          'der_kcal': plan.derKcal,
+          'llm_model_used': plan.llmModelUsed,
+        });
+      }
+      return plans;
+    } on DioException {
+      // Fallback offline: devolver desde cache
+      return box.values
+          .map((e) => PlanSummary.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
   }
 
-  /// Carga el detalle completo de un plan.
+  /// Carga el detalle completo de un plan. Usa cache Hive si sin red.
   Future<PlanDetail> getPlan(String planId) async {
-    final response =
-        await dio.get<Map<String, dynamic>>('/v1/plans/$planId');
-    return PlanDetail.fromJson(response.data!);
+    final box = await Hive.openBox<Map>(_detailBoxName);
+    try {
+      final response =
+          await dio.get<Map<String, dynamic>>('/v1/plans/$planId');
+      final plan = PlanDetail.fromJson(response.data!);
+      // Guardar en cache
+      await box.put(planId, response.data!);
+      return plan;
+    } on DioException {
+      // Fallback offline
+      final cached = box.get(planId);
+      if (cached != null) {
+        return PlanDetail.fromJson(Map<String, dynamic>.from(cached));
+      }
+      rethrow;
+    }
   }
 
   /// Exporta el plan a PDF y comparte la URL pre-signed.

@@ -4,12 +4,16 @@ Endpoints: /v1/auth/register, /v1/auth/login, /v1/auth/refresh, /v1/auth/logout,
 """
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from backend.application.use_cases.auth_use_case import (
     AuthUseCase,
@@ -80,10 +84,17 @@ async def register(
             phone=body.phone,
         )
     except DomainError as exc:
+        logger.info("Registro rechazado: %s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
+            detail="El email ya está registrado. Intenta con otro o inicia sesión.",
         ) from exc
+    except IntegrityError:
+        logger.warning("IntegrityError en registro — probable email duplicado por concurrencia")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El email ya está registrado. Intenta con otro o inicia sesión.",
+        )
 
     return TokenResponse(
         access_token=result.access_token,
@@ -112,11 +123,11 @@ async def login(
     try:
         uc = _build_use_case(session, jwt_service)
         result = await uc.login(email=str(body.email), password=body.password)
-    except DomainError as exc:
+    except DomainError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+            detail="Credenciales incorrectas.",
+        )
 
     return TokenResponse(
         access_token=result.access_token,
@@ -143,11 +154,11 @@ async def refresh(
     try:
         uc = _build_use_case(session, jwt_service)
         result = await uc.refresh(refresh_token=body.refresh_token)
-    except DomainError as exc:
+    except DomainError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+            detail="Sesión expirada. Inicia sesión de nuevo.",
+        )
 
     return TokenResponse(
         access_token=result.access_token,

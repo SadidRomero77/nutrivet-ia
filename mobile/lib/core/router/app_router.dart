@@ -37,16 +37,31 @@ GoRouter appRouter(Ref ref) {
     initialLocation: '/splash',
     redirect: (context, state) async {
       final hasTokens = await storage.hasTokens();
-      final isAuthRoute =
-          state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register' ||
-          state.matchedLocation == '/splash';
+      final loc = state.matchedLocation;
+      final isAuthRoute = loc == '/login' ||
+          loc == '/register' ||
+          loc == '/splash';
 
       if (!hasTokens && !isAuthRoute) return '/login';
+
+      final role = await storage.readRole();
+
       if (hasTokens && isAuthRoute) {
-        final role = await storage.readRole();
         return role == 'vet' ? '/vet/dashboard' : '/dashboard';
       }
+
+      // Guards de rol: evita que owner acceda a rutas de vet y viceversa
+      if (hasTokens && role != null) {
+        final isVetRoute = loc.startsWith('/vet/');
+        final isOwnerOnlyRoute = loc == '/dashboard' ||
+            loc == '/pet/new' ||
+            loc == '/pets/claim' ||
+            loc.startsWith('/pet/');
+
+        if (isVetRoute && role != 'vet') return '/dashboard';
+        if (isOwnerOnlyRoute && role == 'vet') return '/vet/dashboard';
+      }
+
       return null;
     },
     routes: [
