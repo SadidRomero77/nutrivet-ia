@@ -2,7 +2,10 @@
 ///
 /// Adjunta el access token en cada request.
 /// Si recibe 401 → intenta refresh rotativo → si falla, logout.
+/// Refresh serializado con flag estático para evitar race conditions.
 library;
+
+import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,10 +38,18 @@ Dio apiClient(Ref ref) {
 }
 
 /// Interceptor que añade el Authorization header y gestiona refresh 401.
+///
+/// El refresh está serializado con un flag estático para evitar race conditions:
+/// si dos requests fallan con 401 simultáneamente, solo uno ejecuta el refresh;
+/// el otro espera hasta que el primero complete y luego reintenta con el nuevo token.
 class _JwtInterceptor extends Interceptor {
   _JwtInterceptor(this._ref);
 
   final Ref _ref;
+
+  // Serialización de refresh — evita múltiples refreshes concurrentes
+  static bool _isRefreshing = false;
+  static final List<Completer<String?>> _pendingRefreshCompleters = [];
 
   @override
   Future<void> onRequest(
@@ -58,32 +69,65 @@ class _JwtInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    if (err.response?.statusCode == 401) {
-      final storage = _ref.read(secureStorageProvider);
-      final refreshToken = await storage.readRefreshToken();
-      if (refreshToken != null) {
-        try {
-          final dio = Dio(BaseOptions(baseUrl: _baseUrl));
-          final response = await dio.post(
-            '/v1/auth/refresh',
-            data: {'refresh_token': refreshToken},
-          );
-          final newAccess = response.data['access_token'] as String;
-          final newRefresh = response.data['refresh_token'] as String;
-          await storage.writeTokens(
-            accessToken: newAccess,
-            refreshToken: newRefresh,
-          );
-          err.requestOptions.headers['Authorization'] = 'Bearer $newAccess';
-          final retried = await _ref.read(apiClientProvider).fetch(
-                err.requestOptions,
-              );
-          return handler.resolve(retried);
-        } catch (_) {
-          await storage.deleteTokens();
-        }
-      }
+    if (err.response?.statusCode != 401) {
+      return handler.next(err);
     }
+
+    final storage = _ref.read(secureStorageProvider);
+    final refreshToken = await storage.readRefreshToken();
+    if (refreshToken == null) {
+      return handler.next(err);
+    }
+
+    // Si ya hay un refresh en curso, esperar su resultado
+    if (_isRefreshing) {
+      final completer = Completer<String?>();
+      _pendingRefreshCompleters.add(completer);
+      final newToken = await completer.future;
+      if (newToken != null) {
+        err.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+        try {
+          final retried = await _ref.read(apiClientProvider).fetch(err.requestOptions);
+          return handler.resolve(retried);
+        } catch (_) {}
+      }
+      return handler.next(err);
+    }
+
+    // Este request ejecuta el refresh
+    _isRefreshing = true;
+    try {
+      final dio = Dio(BaseOptions(baseUrl: _baseUrl));
+      final response = await dio.post(
+        '/v1/auth/refresh',
+        data: {'refresh_token': refreshToken},
+      );
+      final newAccess = response.data['access_token'] as String;
+      final newRefresh = response.data['refresh_token'] as String;
+      await storage.writeTokens(accessToken: newAccess, refreshToken: newRefresh);
+
+      // Notificar a todos los requests pendientes
+      for (final c in _pendingRefreshCompleters) {
+        c.complete(newAccess);
+      }
+      _pendingRefreshCompleters.clear();
+
+      err.requestOptions.headers['Authorization'] = 'Bearer $newAccess';
+      try {
+        final retried = await _ref.read(apiClientProvider).fetch(err.requestOptions);
+        return handler.resolve(retried);
+      } catch (_) {}
+    } catch (_) {
+      // Refresh falló — notificar a pendientes y hacer logout
+      for (final c in _pendingRefreshCompleters) {
+        c.complete(null);
+      }
+      _pendingRefreshCompleters.clear();
+      await storage.deleteTokens();
+    } finally {
+      _isRefreshing = false;
+    }
+
     handler.next(err);
   }
 }

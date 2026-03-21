@@ -64,6 +64,25 @@ class AgentRepository {
       if (chunk.startsWith('data: ')) {
         final data = chunk.substring(6);
         if (data == '[DONE]') break;
+
+        // Detectar eventos de error del backend antes de emitir al UI
+        try {
+          final decoded = jsonDecode(data);
+          if (decoded is Map && decoded.containsKey('error')) {
+            final msg = decoded['message'] as String? ??
+                decoded['error'] as String? ??
+                'Error del agente';
+            throw Exception(msg);
+          }
+          if (decoded is Map && decoded.containsKey('chunk')) {
+            yield decoded['chunk'] as String;
+            continue;
+          }
+        } catch (e) {
+          if (e is Exception) rethrow;
+          // No es JSON — emitir como texto plano
+        }
+
         yield data;
       }
     }
