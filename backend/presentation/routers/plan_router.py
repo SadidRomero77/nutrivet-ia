@@ -393,3 +393,107 @@ async def list_vet_patients(
             claim_code=claim_code,
         ))
     return responses
+
+
+@vet_router.get("/v1/vet/patients/{pet_id}", response_model=PetResponse)
+async def get_vet_patient(
+    pet_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(require_role("vet")),
+) -> PetResponse:
+    """Obtiene un paciente clínico por ID con datos completos del propietario y claim_code."""
+    from backend.infrastructure.db.models import PetModel as PetORM
+    pet_repo = PostgreSQLPetRepository(session)
+
+    stmt = select(PetORM).where(
+        PetORM.id == pet_id,
+        PetORM.vet_id == user.user_id,
+        PetORM.is_clinic_pet.is_(True),
+        PetORM.is_active.is_(True),
+    )
+    result = await session.execute(stmt)
+    model = result.scalar_one_or_none()
+    if model is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente no encontrado.")
+
+    # Obtener claim code activo (sin usar) si existe
+    claim_stmt = select(ClaimCodeModel.code).where(
+        ClaimCodeModel.pet_id == model.id,
+        ClaimCodeModel.used.is_(False),
+    ).limit(1)
+    claim_result = await session.execute(claim_stmt)
+    claim_code = claim_result.scalar_one_or_none()
+
+    # Desencriptar campos médicos
+    enc = pet_repo._enc
+    conditions = enc.decrypt(model.medical_conditions_enc) if model.medical_conditions_enc else []
+    allergies = enc.decrypt(model.allergies_enc) if model.allergies_enc else []
+
+    return PetResponse(
+        pet_id=model.id,
+        owner_id=model.owner_id,
+        name=model.name,
+        species=model.species,
+        breed=model.breed,
+        sex=model.sex,
+        age_months=model.age_months,
+        weight_kg=model.weight_kg,
+        size=model.size,
+        reproductive_status=model.reproductive_status,
+        activity_level=model.activity_level,
+        bcs=model.bcs,
+        medical_conditions=conditions,
+        allergies=allergies,
+        current_diet=model.current_diet,
+        vet_id=model.vet_id,
+        owner_name=model.owner_name_hint,
+        owner_phone=model.owner_phone_hint,
+        claim_code=claim_code,
+    )
+
+
+@vet_router.delete("/v1/vet/patients/{pet_id}", status_code=204)
+async def delete_vet_patient(
+    pet_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(require_role("vet")),
+) -> None:
+    """Elimina (soft-delete) un paciente clínico.
+
+    Solo si el vet es propietario del paciente, no tiene planes asignados,
+    y aún no ha sido reclamado (claim_code sin usar existe).
+    """
+    from backend.infrastructure.db.models import PetModel as PetORM, NutritionPlanModel
+    stmt = select(PetORM).where(
+        PetORM.id == pet_id,
+        PetORM.vet_id == user.user_id,
+        PetORM.is_clinic_pet.is_(True),
+        PetORM.is_active.is_(True),
+    )
+    result = await session.execute(stmt)
+    model = result.scalar_one_or_none()
+    if model is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente no encontrado.")
+
+    # Verificar que no tenga planes asignados
+    plan_stmt = select(NutritionPlanModel).where(NutritionPlanModel.pet_id == pet_id).limit(1)
+    plan_result = await session.execute(plan_stmt)
+    if plan_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No se puede eliminar: el paciente tiene planes nutricionales asignados.",
+        )
+
+    # Verificar que no esté vinculado (claim_code sin usar = no vinculado)
+    claim_stmt = select(ClaimCodeModel).where(
+        ClaimCodeModel.pet_id == pet_id,
+        ClaimCodeModel.used.is_(True),
+    ).limit(1)
+    claim_result = await session.execute(claim_stmt)
+    if claim_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No se puede eliminar: el paciente ya fue vinculado a un propietario.",
+        )
+
+    model.is_active = False

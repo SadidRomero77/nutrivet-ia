@@ -21,29 +21,96 @@ part 'vet_patient_profile_screen.g.dart';
 Future<PetModel> _vetPatient(Ref ref, String petId) =>
     ref.read(vetRepositoryProvider).getPatient(petId);
 
-class VetPatientProfileScreen extends ConsumerWidget {
+class VetPatientProfileScreen extends ConsumerStatefulWidget {
   const VetPatientProfileScreen({super.key, required this.petId});
 
   final String petId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final petAsync = ref.watch(_vetPatientProvider(petId));
+  ConsumerState<VetPatientProfileScreen> createState() =>
+      _VetPatientProfileScreenState();
+}
+
+class _VetPatientProfileScreenState
+    extends ConsumerState<VetPatientProfileScreen> {
+  bool _deleting = false;
+
+  Future<void> _confirmDelete(PetModel pet) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar paciente'),
+        content: Text(
+          '¿Seguro que deseas eliminar a ${pet.name}? '
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await ref.read(vetRepositoryProvider).deletePatient(pet.petId);
+      if (mounted) context.pop();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _deleting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final petAsync = ref.watch(_vetPatientProvider(widget.petId));
+    final pet = petAsync.valueOrNull;
+    // Solo se puede eliminar si no está vinculado (claim code sin usar) y no tiene planes
+    final canDelete = pet != null && pet.claimCode != null;
 
     return Scaffold(
       appBar: AppBar(
         title: petAsync.whenOrNull(data: (p) => NutrivetTitle(p.name)) ??
             const NutrivetTitle('Paciente clínico'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.auto_awesome),
-            tooltip: 'Generar plan',
-            onPressed: petAsync.whenOrNull(
-              data: (pet) => () => context.push(
-                    '/plan/generate?petId=${pet.petId}&petName=${Uri.encodeComponent(pet.name)}',
-                  ),
+          if (pet != null)
+            IconButton(
+              icon: const Icon(Icons.auto_awesome),
+              tooltip: 'Generar plan',
+              onPressed: () => context.push(
+                '/plan/generate?petId=${pet.petId}&petName=${Uri.encodeComponent(pet.name)}',
+              ),
             ),
-          ),
+          if (canDelete)
+            _deleting
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: Icon(Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error),
+                    tooltip: 'Eliminar paciente',
+                    onPressed: () => _confirmDelete(pet),
+                  ),
         ],
       ),
       bottomNavigationBar: const AppFooter(),

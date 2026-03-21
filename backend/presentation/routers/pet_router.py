@@ -244,15 +244,23 @@ async def create_clinic_pet(
     user: TokenPayload = Depends(require_role("vet")),
 ) -> ClaimCodeResponse:
     """Crear ClinicPet y generar claim code (solo vets con tier Vet)."""
+    from backend.infrastructure.db.models import PetModel as PetORM
     try:
         uc = _claim_use_case(session)
         result = await uc.create_clinic_pet(
             vet_id=user.user_id,
             vet_tier=user.tier,
             pet_data=_to_pet_data(body.pet_data),
-            owner_name=body.owner_name,
-            owner_phone=body.owner_phone,
+            owner_name=body.owner_name or "",
+            owner_phone=body.owner_phone or "",
         )
+        # Flush para que el objeto pendiente esté en la identity map de la sesión
+        await session.flush()
+        # Persistir hints del propietario (campos ORM, fuera del dominio)
+        pet_orm = await session.get(PetORM, result["pet_id"])
+        if pet_orm is not None:
+            pet_orm.owner_name_hint = body.owner_name or None
+            pet_orm.owner_phone_hint = body.owner_phone or None
         return ClaimCodeResponse(pet_id=result["pet_id"], claim_code=result["claim_code"])
     except DomainError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e

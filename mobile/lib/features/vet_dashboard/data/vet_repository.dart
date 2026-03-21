@@ -49,6 +49,11 @@ class VetPendingPlan {
 VetRepository vetRepository(Ref ref) =>
     VetRepository(dio: ref.watch(apiClientProvider));
 
+/// Pacientes del vet — cacheado para uso en el drawer y otras pantallas.
+@riverpod
+Future<List<PetModel>> vetPatients(Ref ref) =>
+    ref.read(vetRepositoryProvider).listPatients();
+
 class VetRepository {
   VetRepository({required this.dio});
 
@@ -70,10 +75,26 @@ class VetRepository {
         .toList();
   }
 
-  /// Obtiene un paciente clínico por ID (vet puede ver cualquier mascota).
+  /// Obtiene un paciente clínico por ID con datos del propietario y claim_code.
   Future<PetModel> getPatient(String petId) async {
-    final response = await dio.get<Map<String, dynamic>>('/v1/pets/$petId');
+    final response = await dio.get<Map<String, dynamic>>('/v1/vet/patients/$petId');
     return PetModel.fromJson(response.data!);
+  }
+
+  /// Elimina (soft-delete) un paciente clínico sin planes y sin vincular.
+  /// Lanza Exception si tiene planes asignados o ya está vinculado.
+  Future<void> deletePatient(String petId) async {
+    try {
+      await dio.delete<void>('/v1/vet/patients/$petId');
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      String msg = 'Error al eliminar el paciente.';
+      if (data is Map) {
+        final detail = data['detail'];
+        if (detail is String) msg = detail;
+      }
+      throw Exception(msg);
+    }
   }
 
   /// Aprueba un plan PENDING_VET.

@@ -68,15 +68,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 48),
+                const SizedBox(height: 40),
                 // Logo
                 Center(
                   child: Image.asset(
                     'assets/images/Logo.png',
-                    height: 120,
+                    height: 180,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                Text(
+                  'NutriVet.IA',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
                 Text(
                   'Nutrición personalizada para tu mascota',
                   style: theme.textTheme.bodyMedium?.copyWith(
@@ -84,7 +94,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 36),
 
                 // Email
                 TextFormField(

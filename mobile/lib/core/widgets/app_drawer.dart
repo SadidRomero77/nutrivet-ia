@@ -15,6 +15,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/pet/data/pet_repository.dart';
 import '../../features/pet/presentation/dashboard_screen.dart';
+import '../../features/vet_dashboard/data/vet_repository.dart';
 
 part 'app_drawer.g.dart';
 
@@ -32,39 +33,62 @@ class AppDrawer extends ConsumerWidget {
     final profile = profileAsync.valueOrNull;
     final isVet = profile?.role == 'vet';
 
-    // Solo el owner accede a petsProvider (vet obtiene 403)
-    final petsAsync = isVet ? null : ref.watch(petsProvider);
-    final pets = petsAsync?.valueOrNull ?? [];
+    // Carga síncrona: owners usan petsProvider, vets usan vetPatientsProvider
+    final pets = isVet
+        ? <PetModel>[]
+        : (ref.watch(petsProvider).valueOrNull ?? []);
+    final vetPets = isVet
+        ? (ref.watch(vetPatientsProvider).valueOrNull ?? <PetModel>[])
+        : <PetModel>[];
 
     return Drawer(
       child: Column(
         children: [
-          // ── Header con branding y nombre del usuario ─────────────────────
-          DrawerHeader(
-            decoration: BoxDecoration(color: theme.colorScheme.primary),
-            margin: EdgeInsets.zero,
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          // ── Header con branding ───────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 44, 16, 18),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset(
                   'assets/images/Logo.png',
-                  height: 64,
+                  height: 140,
                 ),
                 const SizedBox(height: 10),
-                if (profile?.fullName != null)
+                Text(
+                  'NutriVet.IA',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primaryContainer,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Nutrición inteligente para tus mascotas',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white70,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                if (profile?.fullName != null) ...[
+                  const SizedBox(height: 8),
                   Text(
                     profile!.fullName!,
                     style: const TextStyle(
-                        color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
                     overflow: TextOverflow.ellipsis,
-                  )
-                else
-                  const Text(
-                    'Nutrición inteligente para tu mascota',
-                    style: TextStyle(color: Colors.white70, fontSize: 11),
                   ),
+                ],
               ],
             ),
           ),
@@ -79,14 +103,6 @@ class AppDrawer extends ConsumerWidget {
                 if (isVet) ...[
                   // ── Menú veterinario ────────────────────────────────────
                   _DrawerItem(
-                    icon: Icons.dashboard_outlined,
-                    title: 'Panel veterinario',
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.go('/vet/dashboard');
-                    },
-                  ),
-                  _DrawerItem(
                     icon: Icons.pending_actions_outlined,
                     title: 'Planes pendientes',
                     onTap: () {
@@ -100,6 +116,63 @@ class AppDrawer extends ConsumerWidget {
                     onTap: () {
                       Navigator.pop(context);
                       context.go('/vet/dashboard');
+                    },
+                  ),
+                  _DrawerItem(
+                    icon: Icons.person_add_outlined,
+                    title: 'Agregar paciente',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/vet/patients/new');
+                    },
+                  ),
+                  _DrawerItem(
+                    icon: Icons.auto_awesome_outlined,
+                    title: 'Generar plan',
+                    onTap: () {
+                      Navigator.pop(context);
+                      if (vetPets.isEmpty) {
+                        _snackNoMascota(context);
+                        return;
+                      }
+                      if (vetPets.length == 1) {
+                        context.push(
+                          '/plan/generate?petId=${vetPets.first.petId}'
+                          '&petName=${Uri.encodeComponent(vetPets.first.name)}',
+                        );
+                        return;
+                      }
+                      showPetPickerSheet(
+                        context: context,
+                        pets: vetPets,
+                        title: 'Generar plan para...',
+                        onPick: (pet) => context.push(
+                          '/plan/generate?petId=${pet.petId}'
+                          '&petName=${Uri.encodeComponent(pet.name)}',
+                        ),
+                      );
+                    },
+                  ),
+                  _DrawerItem(
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Consultar al agente',
+                    onTap: () {
+                      Navigator.pop(context);
+                      if (vetPets.isEmpty) {
+                        _snackNoMascota(context);
+                        return;
+                      }
+                      if (vetPets.length == 1) {
+                        context.push('/chat?petId=${vetPets.first.petId}');
+                        return;
+                      }
+                      showPetPickerSheet(
+                        context: context,
+                        pets: vetPets,
+                        title: 'Consultar sobre...',
+                        onPick: (pet) =>
+                            context.push('/chat?petId=${pet.petId}'),
+                      );
                     },
                   ),
                 ] else ...[

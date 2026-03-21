@@ -301,7 +301,6 @@ class _PatientCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasOwner = pet.ownerName != null;
-    final isClaimed = pet.claimCode == null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -329,24 +328,9 @@ class _PatientCard extends StatelessWidget {
                   color: theme.colorScheme.outline,
                 ),
               ),
-            if (!isClaimed)
-              Row(
-                children: [
-                  Icon(Icons.link_off,
-                      size: 12, color: theme.colorScheme.tertiary),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Sin vincular',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.tertiary,
-                    ),
-                  ),
-                ],
-              ),
           ],
         ),
-        isThreeLine: hasOwner || !isClaimed,
+        isThreeLine: hasOwner,
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
       ),

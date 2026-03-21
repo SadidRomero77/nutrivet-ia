@@ -61,6 +61,7 @@ flutter_launcher_icons:
   image_path: "assets/images/Logo.png"
   min_sdk_android: 21
   remove_alpha_ios: true
+  adaptive_icon_background: "#FF000000"
 
 flutter:
   uses-material-design: true
