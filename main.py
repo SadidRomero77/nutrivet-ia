@@ -6,6 +6,9 @@ from __future__ import annotations
 import os
 
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 # Carga vars de entorno:
 # - Producción/staging: vars vienen del contenedor (Docker/Coolify) — load_dotenv() es no-op.
@@ -40,11 +43,20 @@ _allowed_origins: list[str] = (
     else ["http://localhost:3000", "http://localhost:8080", "http://localhost:8081"]
 )
 
+# ── Rate Limiter ───────────────────────────────────────────────────────────────
+# Backend: in-memory por IP (adecuado para piloto mono-servidor).
+# Para multi-réplica: cambiar a Redis con storage_uri="redis://..."
+# Límites por endpoint se definen en cada router con @limiter.limit("X/minute").
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+
 app = FastAPI(
     title="NutriVet.IA API",
     version="1.0.0",
     description="Planes nutricionales personalizados para perros y gatos.",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
