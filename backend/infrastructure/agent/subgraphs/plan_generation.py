@@ -11,7 +11,7 @@ Constitution REGLAs activas: 1 (toxicidad), 2 (restricciones), 3 (RER/DER),
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from backend.application.interfaces.agent_trace_repository import IAgentTraceRepository
@@ -183,7 +183,7 @@ async def nodo_6_generate_with_llm(
         "prompt_tokens": response.prompt_tokens,
         "completion_tokens": response.completion_tokens,
         "latency_ms": response.latency_ms,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
     return {**state, "llm_response_content": response.content, "agent_traces": traces}
@@ -317,9 +317,16 @@ async def nodo_10_persist_and_notify(
     traces = state.get("agent_traces", [])
     last_trace = traces[-1] if traces else {}
 
+    # Generar plan_id ANTES del trace para que la referencia sea correcta (REGLA 6).
+    # agent_traces son append-only — sin UPDATE post-inserción, por lo que plan_id
+    # debe conocerse antes de insertar el trace.
+    plan_content = state.get("plan_content") or {}
+    plan_id = _uuid.uuid4()
+    modality_val = state.get("modality", "natural")
+
     trace_id = await trace_repo.append(
         pet_id=pet_id,
-        plan_id=None,
+        plan_id=plan_id,
         llm_model=last_trace.get("llm_model", "unknown"),
         prompt_tokens=last_trace.get("prompt_tokens", 0),
         completion_tokens=last_trace.get("completion_tokens", 0),
@@ -328,18 +335,14 @@ async def nodo_10_persist_and_notify(
             "species": pet["species"],
             "weight_kg": pet["weight_kg"],
             "conditions_count": len(pet.get("medical_conditions", [])),
-            "modality": state.get("modality", "natural"),
+            "modality": modality_val,
         },
         output_summary={
             "rer_kcal": state["rer_kcal"],
             "der_kcal": state["der_kcal"],
         },
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
-
-    plan_content = state.get("plan_content") or {}
-    plan_id = _uuid.uuid4()
-    modality_val = state.get("modality", "natural")
 
     plan = NutritionPlan(
         plan_id=plan_id,

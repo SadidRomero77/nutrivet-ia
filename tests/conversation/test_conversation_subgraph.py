@@ -3,6 +3,11 @@ Tests RED — Consultation Subgraph (NUT-83 · Paso 4).
 
 5 nodos: emergency_check → freemium_gate → query_classifier →
          nutritional_responder | referral_node → persist_conversation
+
+El mock correcto para el LLM de respuesta nutricional es:
+  backend.infrastructure.agent.nodes.nutritional_responder.stream_nutritional_response
+La importación sucede dentro de run_consultation_subgraph (lazy import),
+por lo que el patch la intercepta correctamente dentro del contexto.
 """
 from __future__ import annotations
 
@@ -12,6 +17,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.infrastructure.agent.state import NutriVetState
+
+_STREAM_TARGET = (
+    "backend.infrastructure.agent.nodes.nutritional_responder.stream_nutritional_response"
+)
 
 
 def _chat_state(
@@ -63,10 +72,7 @@ class TestConversationSubgraph:
                 "backend.infrastructure.agent.subgraphs.consultation._check_gate",
                 new_callable=AsyncMock,
             ),
-            patch(
-                "backend.infrastructure.agent.subgraphs.consultation._stream_response",
-                return_value=_fake_stream(),
-            ),
+            patch(_STREAM_TARGET, side_effect=_fake_stream),
             patch(
                 "backend.infrastructure.agent.subgraphs.consultation._persist",
                 new_callable=AsyncMock,
@@ -82,6 +88,8 @@ class TestConversationSubgraph:
         """Consulta médica → referral_node, no llama nutritional_responder."""
         from backend.infrastructure.agent.subgraphs.consultation import run_consultation_subgraph
 
+        mock_stream = MagicMock()
+
         with (
             patch(
                 "backend.infrastructure.agent.subgraphs.consultation._classify",
@@ -92,9 +100,7 @@ class TestConversationSubgraph:
                 "backend.infrastructure.agent.subgraphs.consultation._check_gate",
                 new_callable=AsyncMock,
             ),
-            patch(
-                "backend.infrastructure.agent.subgraphs.consultation._stream_response",
-            ) as mock_stream,
+            patch(_STREAM_TARGET, mock_stream),
             patch(
                 "backend.infrastructure.agent.subgraphs.consultation._persist",
                 new_callable=AsyncMock,
@@ -114,6 +120,7 @@ class TestConversationSubgraph:
         from backend.infrastructure.agent.subgraphs.consultation import run_consultation_subgraph
 
         async def _fake_stream(*args, **kwargs):
+            # Respuesta sin disclaimer — el subgrafo lo agrega automáticamente
             yield "El pollo es buena fuente de proteínas."
 
         with (
@@ -126,10 +133,7 @@ class TestConversationSubgraph:
                 "backend.infrastructure.agent.subgraphs.consultation._check_gate",
                 new_callable=AsyncMock,
             ),
-            patch(
-                "backend.infrastructure.agent.subgraphs.consultation._stream_response",
-                return_value=_fake_stream(),
-            ),
+            patch(_STREAM_TARGET, side_effect=_fake_stream),
             patch(
                 "backend.infrastructure.agent.subgraphs.consultation._persist",
                 new_callable=AsyncMock,
@@ -138,7 +142,7 @@ class TestConversationSubgraph:
             result = await run_consultation_subgraph(_chat_state())
 
         response = result.get("response", "")
-        assert "NutriVet" in response or "nutricional digital" in response.lower()
+        assert "asesoría nutricional digital" in response.lower()
 
     @pytest.mark.asyncio
     async def test_emergencia_no_llama_freemium_gate(self) -> None:
@@ -185,10 +189,7 @@ class TestConversationSubgraph:
                 "backend.infrastructure.agent.subgraphs.consultation._check_gate",
                 new_callable=AsyncMock,
             ),
-            patch(
-                "backend.infrastructure.agent.subgraphs.consultation._stream_response",
-                return_value=_fake_stream(),
-            ),
+            patch(_STREAM_TARGET, side_effect=_fake_stream),
             patch(
                 "backend.infrastructure.agent.subgraphs.consultation._persist",
                 new_callable=AsyncMock,

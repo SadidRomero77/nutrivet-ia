@@ -16,9 +16,16 @@ from fastapi.responses import StreamingResponse
 
 from backend.infrastructure.agent.nodes.intent_classifier import intent_classifier
 from backend.infrastructure.agent.nodes.load_context import load_context
-from backend.infrastructure.agent.orchestrator import build_orchestrator
+from backend.infrastructure.agent.orchestrator import (
+    build_orchestrator,
+    get_orchestrator,
+    set_request_functions,
+)
 from backend.infrastructure.agent.state import NutriVetState
-from backend.infrastructure.agent.subgraphs.consultation import run_consultation_subgraph
+from backend.infrastructure.agent.subgraphs.consultation import (
+    run_consultation_subgraph,
+    run_consultation_subgraph_streaming,
+)
 from backend.infrastructure.agent.subgraphs.consultation_stub import consultation_stub
 from backend.infrastructure.db.agent_quota_repository import PostgreSQLAgentQuotaRepository
 from backend.infrastructure.db.conversation_repository import PostgreSQLConversationRepository
@@ -114,20 +121,24 @@ async def process_message(
     load_context_fn = _build_load_context_fn(session)
     plan_generation_fn = _build_plan_generation_fn(session)
 
-    orchestrator = build_orchestrator(
+    # Singleton: el grafo se compiló una vez al inicio. Sólo configuramos
+    # las funciones con dependencias DB para este request (aisladas por ContextVar).
+    set_request_functions(
         load_context_fn=load_context_fn,
         intent_classifier_fn=intent_classifier,
         plan_generation_fn=plan_generation_fn,
         consultation_fn=consultation_stub,
         scanner_fn=scanner_stub,
     )
+    orchestrator = get_orchestrator()
 
     try:
         result = await orchestrator.ainvoke(initial_state)
     except Exception as e:
+        logger.exception("Error en orquestador LangGraph: %s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error en el agente: {str(e)}",
+            detail="Error procesando el mensaje. Por favor intenta de nuevo.",
         ) from e
 
     return AgentResponse.from_state(result)
@@ -172,9 +183,10 @@ async def scan_label(
     try:
         result_state = await run_scanner_subgraph(initial_state)
     except Exception as e:
+        logger.exception("Error en scanner subgraph: %s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error en el scanner: {str(e)}",
+            detail="Error procesando la imagen. Por favor intenta de nuevo.",
         ) from e
 
     if result_state.get("error"):
@@ -239,20 +251,25 @@ async def chat(
             logger.warning("No se pudo cargar historial conversacional: %s", hist_err)
 
     async def _event_stream():
-        """Genera el stream SSE con la respuesta del agente."""
+        """
+        Genera el stream SSE con la respuesta del agente — streaming real chunk a chunk.
+
+        Cada chunk del LLM se envía inmediatamente como evento SSE individual.
+        El cliente Flutter puede mostrar el texto progresivamente.
+        """
         try:
-            result = await run_consultation_subgraph(
+            gen = await run_consultation_subgraph_streaming(
                 initial_state,
                 quota_repo=quota_repo,
                 conversation_repo=conversation_repo,
             )
-            response_text = result.get("response", "")
-            # Enviar en un único evento (respuesta ya completa desde el subgraph)
-            yield f"data: {json.dumps({'chunk': response_text})}\n\n"
+            async for chunk in gen:
+                if chunk:
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as exc:
-            error_msg = f"Error en el agente conversacional: {str(exc)}"
-            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            logger.exception("Error en consultation subgraph: %s", type(exc).__name__)
+            yield f"data: {json.dumps({'error': 'Error procesando tu consulta. Por favor intenta de nuevo.'})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(

@@ -22,8 +22,15 @@ def get_jwt_service() -> JWTService:
     Proveedor del JWTService — sobreescribible en tests via app.dependency_overrides.
 
     Lee la clave secreta desde variables de entorno.
+    Constitution REGLA 6: JWT nunca sin secret seguro — falla ruidosamente si no está configurado.
     """
-    secret = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-production")
+    secret = os.environ.get("JWT_SECRET_KEY")
+    if not secret:
+        raise RuntimeError(
+            "JWT_SECRET_KEY no está configurado. "
+            "Define la variable de entorno con un secret seguro (≥32 caracteres). "
+            "Ejemplo: openssl rand -hex 32"
+        )
     algorithm = os.environ.get("JWT_ALGORITHM", "HS256")
     return JWTService(secret_key=secret, algorithm=algorithm)
 

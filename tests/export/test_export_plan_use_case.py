@@ -10,7 +10,7 @@ Reglas:
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -49,7 +49,7 @@ def _make_plan(
             "has_transition_protocol": False,
         },
         approved_by_vet_id=approved_by_vet_id,
-        approval_timestamp=datetime.utcnow() if status == PlanStatus.ACTIVE else None,
+        approval_timestamp=datetime.now(timezone.utc) if status == PlanStatus.ACTIVE else None,
         review_date=None,
         vet_comment=None,
         agent_trace_id=uuid.uuid4(),

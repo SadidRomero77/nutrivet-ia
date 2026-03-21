@@ -7,9 +7,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
+
+
+def _now() -> datetime:
+    """Retorna la hora UTC actual con timezone info (Python 3.12+)."""
+    return datetime.now(timezone.utc)
 
 
 class PlanJobStatus(str, Enum):
@@ -30,22 +35,22 @@ class PlanJob:
     status: PlanJobStatus = PlanJobStatus.QUEUED
     plan_id: Optional[uuid.UUID] = None
     error_message: Optional[str] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_now)
+    updated_at: datetime = field(default_factory=_now)
 
     def mark_processing(self) -> None:
         """Transición QUEUED → PROCESSING."""
         self.status = PlanJobStatus.PROCESSING
-        self.updated_at = datetime.utcnow()
+        self.updated_at = _now()
 
     def mark_ready(self, plan_id: uuid.UUID) -> None:
         """Transición PROCESSING → READY con plan_id generado."""
         self.status = PlanJobStatus.READY
         self.plan_id = plan_id
-        self.updated_at = datetime.utcnow()
+        self.updated_at = _now()
 
     def mark_failed(self, error_message: str) -> None:
         """Transición PROCESSING → FAILED con mensaje de error."""
         self.status = PlanJobStatus.FAILED
         self.error_message = error_message
-        self.updated_at = datetime.utcnow()
+        self.updated_at = _now()

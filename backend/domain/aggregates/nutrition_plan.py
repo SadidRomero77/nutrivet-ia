@@ -8,7 +8,7 @@ Constitution REGLA 4:
   - Plan ACTIVE al que se agrega condición médica → vuelve a PENDING_VET.
 """
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Any
 from uuid import UUID
@@ -101,7 +101,7 @@ class NutritionPlan:
             )
         self.status = PlanStatus.ACTIVE
         self.approved_by_vet_id = vet_id
-        self.approval_timestamp = datetime.utcnow()
+        self.approval_timestamp = datetime.now(timezone.utc)
         if review_date is not None:
             self.review_date = review_date
 

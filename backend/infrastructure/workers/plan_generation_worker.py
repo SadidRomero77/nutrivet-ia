@@ -19,7 +19,7 @@ Constitution REGLAS activas: 1 (toxicidad), 2 (restricciones), 3 (RER/DER), 4 (H
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from backend.application.llm.llm_router import LLMRouter
@@ -213,9 +213,14 @@ class PlanGenerationWorker:
         plan_type = PlanType.TEMPORAL_MEDICAL if has_medical_conditions else PlanType.ESTANDAR
 
         # --- Paso 10: Persistir agent_trace (inmutable — REGLA 6) ---
+        # plan_id se genera aquí para pasarlo al trace.
+        # agent_traces son append-only sin UPDATE, por lo que plan_id debe
+        # conocerse ANTES de insertar el trace.
+        plan_uuid = uuid.uuid4()
+
         trace_id = await self._trace_repo.append(
             pet_id=pet.pet_id,
-            plan_id=None,  # Se actualizará con el plan_id real
+            plan_id=plan_uuid,
             llm_model=llm_response.model_used,
             prompt_tokens=llm_response.prompt_tokens,
             completion_tokens=llm_response.completion_tokens,
@@ -232,15 +237,15 @@ class PlanGenerationWorker:
                 "ingredients_count": len(ingredients_raw),
                 "toxic_found": toxic_found,
             },
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         # Incluir substitute_set en el contenido del plan
         plan_content["substitute_set"] = substitute_set
 
-        # Persistir plan
+        # Persistir plan usando el mismo plan_uuid ya referenciado en el trace
         plan = NutritionPlan(
-            plan_id=uuid.uuid4(),
+            plan_id=plan_uuid,
             pet_id=pet.pet_id,
             owner_id=pet.owner_id,
             plan_type=plan_type,

@@ -16,7 +16,7 @@ from __future__ import annotations
 import base64
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from backend.infrastructure.agent.nodes.image_validator import (
@@ -244,7 +244,7 @@ async def run_scanner_subgraph(
     traces.append({
         "event": "scanner_ocr",
         "llm_model": _OCR_MODEL,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "semaphore": semaphore_result.color,
         "ingredients_count": len(ingredients),
     })
