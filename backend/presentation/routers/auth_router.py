@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.application.use_cases.auth_use_case import (
@@ -31,6 +33,9 @@ from backend.presentation.schemas.auth_schemas import (
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
+# Rate limiter — previene brute force en endpoints de autenticación
+_limiter = Limiter(key_func=get_remote_address)
+
 
 def _build_use_case(
     session: AsyncSession,
@@ -51,7 +56,9 @@ def _build_use_case(
     status_code=status.HTTP_201_CREATED,
     summary="Registrar nuevo usuario",
 )
+@_limiter.limit("5/minute")  # Previene enumeración masiva de emails
 async def register(
+    request: Request,
     body: RegisterRequest,
     session: AsyncSession = Depends(get_db_session),
     jwt_service: JWTService = Depends(get_jwt_service),
@@ -90,7 +97,9 @@ async def register(
     status_code=status.HTTP_200_OK,
     summary="Iniciar sesión",
 )
+@_limiter.limit("10/minute")  # Previene brute force de contraseñas
 async def login(
+    request: Request,
     body: LoginRequest,
     session: AsyncSession = Depends(get_db_session),
     jwt_service: JWTService = Depends(get_jwt_service),

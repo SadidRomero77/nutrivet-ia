@@ -11,8 +11,10 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from backend.infrastructure.agent.nodes.intent_classifier import intent_classifier
 from backend.infrastructure.agent.nodes.load_context import load_context
@@ -54,6 +56,9 @@ from backend.presentation.schemas.scan_schemas import ScanResult
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent"])
 
+# Rate limiter compartido (instancia configurada en main.py via app.state.limiter)
+_limiter = Limiter(key_func=get_remote_address)
+
 
 def _build_plan_generation_fn(session):
     """Construye el pipeline completo del plan generation subgraph con dependencias inyectadas."""
@@ -93,8 +98,10 @@ def _build_load_context_fn(session):
     status_code=status.HTTP_200_OK,
     summary="Procesa mensaje del usuario con el orquestador LangGraph",
 )
+@_limiter.limit("10/minute")  # Protege contra abuso de LLM calls (costo directo)
 async def process_message(
-    request: AgentRequest,
+    request: Request,
+    body: AgentRequest,
     current_user=Depends(get_current_user),
     session=Depends(get_db_session),
 ) -> AgentResponse:
@@ -106,11 +113,11 @@ async def process_message(
     """
     initial_state = NutriVetState(
         user_id=str(current_user.user_id),
-        pet_id=request.pet_id,
+        pet_id=body.pet_id,
         user_tier=current_user.tier.value.upper(),
         user_role=current_user.role.value,
-        message=request.message,
-        modality=request.modality or "natural",
+        message=body.message,
+        modality=body.modality or "natural",
         agent_traces=[],
         conversation_history=[],
         medical_restrictions=[],
@@ -150,7 +157,9 @@ async def process_message(
     status_code=status.HTTP_200_OK,
     summary="Escanea etiqueta nutricional — solo tabla nutricional o lista de ingredientes",
 )
+@_limiter.limit("5/minute")  # OCR con gpt-4o vision: más caro, límite más estricto
 async def scan_label(
+    request: Request,
     pet_id: str,
     image: UploadFile = File(...),
     current_user=Depends(get_current_user),
@@ -209,8 +218,10 @@ async def scan_label(
     status_code=status.HTTP_200_OK,
     summary="Chat conversacional nutricional — respuesta en streaming SSE",
 )
+@_limiter.limit("20/minute")  # Chat tiene freemium gate interno, límite menos estricto
 async def chat(
-    request: AgentRequest,
+    request: Request,
+    body: AgentRequest,
     current_user=Depends(get_current_user),
     session=Depends(get_db_session),
 ) -> StreamingResponse:
@@ -230,11 +241,11 @@ async def chat(
 
     initial_state = NutriVetState(
         user_id=str(current_user.user_id),
-        pet_id=request.pet_id or "",
+        pet_id=body.pet_id or "",
         user_tier=current_user.tier.value.upper(),
         user_role=current_user.role.value,
-        message=request.message,
-        modality=request.modality or "natural",
+        message=body.message,
+        modality=body.modality or "natural",
         agent_traces=[],
         conversation_history=[],
         medical_restrictions=[],
@@ -243,9 +254,9 @@ async def chat(
     )
 
     # Cargar historial previo si hay pet_id
-    if request.pet_id:
+    if body.pet_id:
         try:
-            history = await conversation_repo.list_by_pet(request.pet_id, limit=10)
+            history = await conversation_repo.list_by_pet(body.pet_id, limit=10)
             initial_state = {**initial_state, "conversation_history": history}
         except Exception as hist_err:
             logger.warning("No se pudo cargar historial conversacional: %s", hist_err)

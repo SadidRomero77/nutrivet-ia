@@ -312,7 +312,8 @@ async def nodo_10_persist_and_notify(
     plan_type = PlanType.TEMPORAL_MEDICAL if requires_vet else PlanType.ESTANDAR
 
     from backend.domain.value_objects.bcs import BCSPhase
-    bcs_phase = BCSPhase(state["bcs_phase"])
+    # Normalizar a minúscula para tolerar variaciones de capitalización en el state
+    bcs_phase = BCSPhase(str(state["bcs_phase"]).lower())
 
     traces = state.get("agent_traces", [])
     last_trace = traces[-1] if traces else {}

@@ -343,11 +343,13 @@ async def list_vet_patients(
     """Lista ClinicPets creados por el vet autenticado.
 
     Incluye owner_name, owner_phone y claim_code activo (si no fue reclamado aún).
+    Usa 2 queries fijas (sin N+1): una para pacientes, una para claim codes.
     """
+    import uuid as _uuid
     from backend.infrastructure.db.models import PetModel as PetORM
     pet_repo = PostgreSQLPetRepository(session)
 
-    # Query directa al ORM para acceder a owner_name_hint y owner_phone_hint
+    # Query 1: todos los pacientes del vet
     stmt = select(PetORM).where(
         PetORM.vet_id == user.user_id,
         PetORM.is_clinic_pet.is_(True),
@@ -356,18 +358,25 @@ async def list_vet_patients(
     result = await session.execute(stmt)
     models = result.scalars().all()
 
+    if not models:
+        return []
+
+    # Query 2: claim codes activos para todos los pacientes (una sola query con IN)
+    patient_ids = [m.id for m in models]
+    claims_stmt = select(ClaimCodeModel.pet_id, ClaimCodeModel.code).where(
+        ClaimCodeModel.pet_id.in_(patient_ids),
+        ClaimCodeModel.used.is_(False),
+    )
+    claims_result = await session.execute(claims_stmt)
+    # Tomar el primer claim code por pet (el resto los ignoramos)
+    claim_codes_by_pet: dict[_uuid.UUID, str] = {}
+    for row in claims_result:
+        if row.pet_id not in claim_codes_by_pet:
+            claim_codes_by_pet[row.pet_id] = row.code
+
+    enc = pet_repo._enc
     responses: list[PetResponse] = []
     for model in models:
-        # Obtener claim code activo (sin usar) si existe
-        claim_stmt = select(ClaimCodeModel.code).where(
-            ClaimCodeModel.pet_id == model.id,
-            ClaimCodeModel.used.is_(False),
-        ).limit(1)
-        claim_result = await session.execute(claim_stmt)
-        claim_code = claim_result.scalar_one_or_none()
-
-        # Desencriptar campos médicos
-        enc = pet_repo._enc
         conditions = enc.decrypt(model.medical_conditions_enc) if model.medical_conditions_enc else []
         allergies = enc.decrypt(model.allergies_enc) if model.allergies_enc else []
 
@@ -390,7 +399,7 @@ async def list_vet_patients(
             vet_id=model.vet_id,
             owner_name=model.owner_name_hint,
             owner_phone=model.owner_phone_hint,
-            claim_code=claim_code,
+            claim_code=claim_codes_by_pet.get(model.id),
         ))
     return responses
 

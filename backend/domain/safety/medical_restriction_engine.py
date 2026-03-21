@@ -4,6 +4,7 @@ Constitution REGLA 2: el LLM NO puede sobrescribir RESTRICTIONS_BY_CONDITION.
 
 Este módulo es Python puro — cero dependencias externas.
 """
+import unicodedata
 from dataclasses import dataclass
 
 from backend.domain.exceptions.domain_errors import DomainError
@@ -12,6 +13,47 @@ from backend.domain.safety.medical_restrictions import (
     VALID_CONDITIONS,
     ConditionRestrictions,
 )
+
+
+def _tokenize(text: str) -> frozenset[str]:
+    """
+    Convierte un texto en un frozenset de tokens normalizados.
+
+    Normaliza:
+    - Minúsculas
+    - Reemplaza guiones bajos por espacios (términos como "fósforo_alto")
+    - Elimina caracteres no alfanuméricos (excepto espacios)
+
+    Ejemplo: "fósforo_alto" → {"fósforo", "alto"}
+    """
+    normalized = unicodedata.normalize("NFC", text.lower().replace("_", " "))
+    return frozenset(t for t in normalized.split() if t)
+
+
+def _terms_match(ingredient: str, restriction_term: str) -> bool:
+    """
+    Verifica si un ingrediente hace match con un término de restricción.
+
+    Usa intersección de tokens para evitar falsos positivos por substring:
+    - "grasa" NO hace match con "grasas totales mayor 10pct ms" (tokens distintos)
+    - "fósforo" SÍ hace match con "fósforo alto" (token "fósforo" compartido)
+    - "proteína de pollo" NO hace match con "proteína alta densidad" (sin tokens comunes
+      que sean términos restrictivos — salvo "proteína", que sí compartiría)
+
+    La intersección de tokens es más precisa que substring bidireccional y evita
+    el caso documentado: "sal" como substring de "ensalada" o "grasa" dentro de
+    "grasas totales mayor 10pct ms".
+
+    Args:
+        ingredient: Nombre del ingrediente del plan (ej. "pollo", "fósforo").
+        restriction_term: Término de la restricción (ej. "fósforo_alto").
+
+    Returns:
+        True si hay coincidencia de al menos un token.
+    """
+    ingredient_tokens = _tokenize(ingredient)
+    restriction_tokens = _tokenize(restriction_term)
+    return bool(ingredient_tokens & restriction_tokens)
 
 
 @dataclass(frozen=True)
@@ -106,17 +148,16 @@ class MedicalRestrictionEngine:
         ingrediente_lower = ingredient.lower()
         resultados: list[RestrictionResult] = []
 
-        # Verificar contra términos prohibidos
+        # Verificar contra términos prohibidos con matching por token (no substring)
         for termino_prohibido in restricciones.prohibited:
-            termino_norm = termino_prohibido.lower().replace("_", " ")
-            if termino_norm in ingrediente_lower or ingrediente_lower in termino_norm:
+            if _terms_match(ingredient, termino_prohibido):
                 resultados.append(RestrictionResult(
                     ingredient=ingredient,
                     condition=_find_condition_for_rule(termino_prohibido, conditions),
                     is_violation=True,
                     category="prohibited",
                     reason=(
-                        f"'{ingredient}' contiene o es '{termino_prohibido}' — "
+                        f"'{ingredient}' coincide con '{termino_prohibido}' — "
                         f"prohibido por restricción médica."
                     ),
                 ))
