@@ -51,8 +51,8 @@ class WeightRecordRequest(BaseModel):
 class ClinicPetRequest(BaseModel):
     """Body de POST /v1/pets/clinic (vet only)."""
     pet_data: PetCreateRequest
-    owner_name: str = Field(..., min_length=1, max_length=100)
-    owner_phone: str = Field(..., min_length=5, max_length=30)
+    owner_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    owner_phone: Optional[str] = Field(None, min_length=5, max_length=30)
 
 
 class ClaimPetRequest(BaseModel):

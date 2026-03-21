@@ -116,18 +116,26 @@ class PetRepository {
 
   /// Crea una nueva mascota (13 campos del wizard).
   Future<PetModel> createPet(Map<String, dynamic> data) async {
-    final response =
-        await dio.post<Map<String, dynamic>>('/v1/pets', data: data);
-    return PetModel.fromJson(response.data!);
+    try {
+      final response =
+          await dio.post<Map<String, dynamic>>('/v1/pets', data: data);
+      return PetModel.fromJson(response.data!);
+    } on DioException catch (e) {
+      throw Exception(_extractDetail(e));
+    }
   }
 
   /// Actualiza datos editables de la mascota (peso, BCS, actividad, dieta).
   Future<PetModel> updatePet(String petId, Map<String, dynamic> data) async {
-    final response = await dio.patch<Map<String, dynamic>>(
-      '/v1/pets/$petId',
-      data: data,
-    );
-    return PetModel.fromJson(response.data!);
+    try {
+      final response = await dio.patch<Map<String, dynamic>>(
+        '/v1/pets/$petId',
+        data: data,
+      );
+      return PetModel.fromJson(response.data!);
+    } on DioException catch (e) {
+      throw Exception(_extractDetail(e));
+    }
   }
 
   /// Elimina (soft-delete) una mascota.
@@ -136,8 +144,26 @@ class PetRepository {
     try {
       await dio.delete<void>('/v1/pets/$petId');
     } on DioException catch (e) {
-      final detail = (e.response?.data as Map?)?['detail'] as String?;
-      throw Exception(detail ?? 'Error al eliminar la mascota');
+      throw Exception(_extractDetail(e));
     }
+  }
+
+  /// Extrae el campo 'detail' del cuerpo de la respuesta de error del backend.
+  static String _extractDetail(DioException e) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final detail = data['detail'];
+      if (detail is String) return detail;
+      if (detail is List && detail.isNotEmpty) {
+        // Errores de validación Pydantic: lista de objetos con 'msg'
+        final first = detail.first;
+        if (first is Map) return first['msg']?.toString() ?? detail.toString();
+      }
+    }
+    final status = e.response?.statusCode;
+    if (status == 401) return 'Sesión expirada. Por favor inicia sesión nuevamente.';
+    if (status == 403) return 'No tienes permisos para realizar esta acción.';
+    if (status == 422) return 'Datos inválidos. Revisa el formulario.';
+    return 'Error de conexión. Verifica tu internet e intenta de nuevo.';
   }
 }
