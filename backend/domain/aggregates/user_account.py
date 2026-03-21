@@ -77,6 +77,8 @@ class UserAccount:
     role: UserRole
     tier: UserTier
     is_active: bool = True
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
 
     # -- Factory method --
 
@@ -87,6 +89,8 @@ class UserAccount:
         password_hash: str,
         role: UserRole,
         tier: Optional[UserTier] = None,
+        full_name: Optional[str] = None,
+        phone: Optional[str] = None,
     ) -> "UserAccount":
         """
         Crea un UserAccount nuevo con valores por defecto según rol.
@@ -99,13 +103,16 @@ class UserAccount:
         else:
             assigned_tier = tier if tier is not None else UserTier.FREE
 
-        return cls(
+        instance = cls(
             id=uuid.uuid4(),
             email=email.lower().strip(),
             password_hash=password_hash,
             role=role,
             tier=assigned_tier,
         )
+        instance.full_name = full_name
+        instance.phone = phone
+        return instance
 
     # -- Validación de contraseña --
 

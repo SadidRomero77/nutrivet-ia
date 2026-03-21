@@ -77,6 +77,7 @@ class PetResponse(BaseModel):
     medical_conditions: list[str]
     allergies: list[str]
     current_diet: str
+    vet_id: Optional[uuid.UUID] = None
 
 
 class WeightRecordResponse(BaseModel):

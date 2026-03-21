@@ -1,4 +1,4 @@
-/// Repositorio de autenticación — login, registro, refresh, logout.
+/// Repositorio de autenticación — login, registro, refresh, logout, perfil.
 library;
 
 import 'package:dio/dio.dart';
@@ -10,6 +10,34 @@ import '../../../core/storage/secure_storage.dart';
 import '../../../core/utils/jwt_utils.dart';
 
 part 'auth_repository.g.dart';
+
+/// Modelo del perfil del usuario autenticado.
+class UserProfile {
+  UserProfile({
+    required this.userId,
+    required this.email,
+    required this.role,
+    required this.tier,
+    this.fullName,
+    this.phone,
+  });
+
+  factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
+        userId: json['user_id'] as String,
+        email: json['email'] as String,
+        role: json['role'] as String,
+        tier: json['tier'] as String,
+        fullName: json['full_name'] as String?,
+        phone: json['phone'] as String?,
+      );
+
+  final String userId;
+  final String email;
+  final String role;
+  final String tier;
+  final String? fullName;
+  final String? phone;
+}
 
 /// Modelo de respuesta del login/refresh.
 class AuthTokens {
@@ -62,6 +90,7 @@ class AuthRepository {
     required String email,
     required String password,
     required String fullName,
+    String? phone,
     String role = 'owner',
   }) async {
     final response = await dio.post<Map<String, dynamic>>(
@@ -71,6 +100,7 @@ class AuthRepository {
         'password': password,
         'full_name': fullName,
         'role': role,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
       },
     );
     final tokens = AuthTokens.fromJson(response.data!);
@@ -81,6 +111,19 @@ class AuthRepository {
       role: decodedRole,
     );
     return decodedRole;
+  }
+
+  /// Obtiene el perfil del usuario autenticado.
+  Future<UserProfile> getMe() async {
+    final response = await dio.get<Map<String, dynamic>>('/v1/auth/me');
+    return UserProfile.fromJson(response.data!);
+  }
+
+  /// Obtiene el perfil público de un veterinario.
+  Future<UserProfile> getVetProfile(String vetId) async {
+    final response =
+        await dio.get<Map<String, dynamic>>('/v1/auth/vet/$vetId/profile');
+    return UserProfile.fromJson(response.data!);
   }
 
   /// Cierra sesión y elimina tokens locales.

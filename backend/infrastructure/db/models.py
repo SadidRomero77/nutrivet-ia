@@ -36,6 +36,8 @@ class UserModel(Base):
         String(50), nullable=False, default="active"
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    full_name: Mapped[str | None] = mapped_column(String(150), nullable=True, default=None)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -87,6 +89,10 @@ class PetModel(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False, index=True,
+    )
+    vet_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, default=None, index=True,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     species: Mapped[str] = mapped_column(

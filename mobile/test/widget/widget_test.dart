@@ -64,13 +64,20 @@ void main() {
       expect(find.text('Email inválido'), findsOneWidget);
     });
 
-    testWidgets('RegisterScreen — campos nombre, email, contraseña y botón', (tester) async {
+    testWidgets('RegisterScreen — campos nombre, teléfono, email, contraseña y botón', (tester) async {
+      // Use taller screen so all form fields (incl. new phone field) fit in viewport
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final mockRepo = _MockAuthRepository();
       await tester.pumpWidget(
         _app(const RegisterScreen(),
             overrides: [authRepositoryProvider.overrideWithValue(mockRepo)]),
       );
       expect(find.byKey(const ValueKey('name_field')), findsOneWidget);
+      expect(find.byKey(const ValueKey('phone_field')), findsOneWidget);
       expect(find.byKey(const ValueKey('email_field')), findsOneWidget);
       expect(find.byKey(const ValueKey('password_field')), findsOneWidget);
       expect(find.byKey(const ValueKey('register_button')), findsOneWidget);

@@ -43,6 +43,8 @@ class PostgreSQLUserRepository(IUserRepository):
                 tier=user.tier.value,
                 subscription_status="active",
                 is_active=user.is_active,
+                full_name=user.full_name,
+                phone=user.phone,
             )
             self._session.add(model)
         else:
@@ -51,6 +53,8 @@ class PostgreSQLUserRepository(IUserRepository):
             existing.role = user.role.value
             existing.tier = user.tier.value
             existing.is_active = user.is_active
+            existing.full_name = user.full_name
+            existing.phone = user.phone
 
     async def find_by_email(self, email: str) -> Optional[UserAccount]:
         """Busca usuario por email. Retorna None si no existe."""
@@ -78,4 +82,6 @@ class PostgreSQLUserRepository(IUserRepository):
             role=UserRole(model.role),
             tier=UserTier(model.tier),
             is_active=model.is_active,
+            full_name=model.full_name,
+            phone=model.phone,
         )

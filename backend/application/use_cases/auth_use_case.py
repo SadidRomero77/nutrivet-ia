@@ -55,6 +55,8 @@ class AuthUseCase:
         email: str,
         password: str,
         role: UserRole,
+        full_name: str | None = None,
+        phone: str | None = None,
     ) -> TokenResponse:
         """
         Registra un nuevo usuario y retorna tokens de acceso.
@@ -63,6 +65,8 @@ class AuthUseCase:
             email: Dirección de correo electrónico única.
             password: Contraseña en texto plano (se hashea antes de persistir).
             role: Rol del usuario (owner / vet).
+            full_name: Nombre completo del usuario (opcional).
+            phone: Teléfono del usuario (opcional).
 
         Returns:
             TokenResponse con access_token y refresh_token.
@@ -82,7 +86,13 @@ class AuthUseCase:
 
         # Crear usuario
         password_hash = self._password_service.hash_password(password)
-        user = UserAccount.create(email=email, password_hash=password_hash, role=role)
+        user = UserAccount.create(
+            email=email,
+            password_hash=password_hash,
+            role=role,
+            full_name=full_name,
+            phone=phone,
+        )
         await self._user_repo.save(user)
 
         # Emitir tokens

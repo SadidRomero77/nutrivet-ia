@@ -58,6 +58,8 @@ class PostgreSQLPetRepository(IPetRepository):
             ),
             allergies_enc=self._enc.encrypt(pet.allergies),
             current_diet=pet.current_diet.value,
+            is_clinic_pet=pet.is_clinic_pet,
+            vet_id=pet.vet_id,
         )
         self._session.add(model)
 
@@ -70,7 +72,8 @@ class PostgreSQLPetRepository(IPetRepository):
         model.name = pet.name
         model.weight_kg = pet.weight_kg
         model.bcs = pet.bcs.value
-        model.activity_level = pet.activity_level.value
+        model.activity_level = pet.activity_level.value if hasattr(pet.activity_level, 'value') else str(pet.activity_level)
+        model.current_diet = pet.current_diet.value if hasattr(pet.current_diet, 'value') else str(pet.current_diet)
         model.medical_conditions_enc = self._enc.encrypt(
             [c.value for c in pet.medical_conditions]
         )
@@ -112,7 +115,7 @@ class PostgreSQLPetRepository(IPetRepository):
     async def list_clinic_by_vet(self, vet_id: uuid.UUID) -> list[PetProfile]:
         """Lista ClinicPets activos creados por un veterinario."""
         stmt = select(PetModel).where(
-            PetModel.owner_id == vet_id,
+            PetModel.vet_id == vet_id,
             PetModel.is_clinic_pet.is_(True),
             PetModel.is_active.is_(True),
         )
@@ -147,6 +150,8 @@ class PostgreSQLPetRepository(IPetRepository):
             medical_conditions=[MedicalCondition(c) for c in conditions_raw],
             allergies=allergies,
             current_diet=CurrentDiet(model.current_diet),
+            is_clinic_pet=model.is_clinic_pet,
+            vet_id=model.vet_id,
         )
 
     @staticmethod

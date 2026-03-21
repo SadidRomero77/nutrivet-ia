@@ -19,6 +19,7 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   String _role = 'owner';
@@ -29,6 +30,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
@@ -45,6 +47,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             email: _emailCtrl.text.trim(),
             password: _passCtrl.text,
             fullName: _nameCtrl.text.trim(),
+            phone: _phoneCtrl.text.trim(),
             role: _role,
           );
       if (mounted) {
@@ -132,6 +135,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  key: const ValueKey('phone_field'),
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Teléfono móvil',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                    hintText: '+57 300 000 0000',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Teléfono requerido';
+                    if (v.trim().length < 7) return 'Teléfono inválido';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
                   key: const ValueKey('email_field'),
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
@@ -161,8 +180,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       tooltip: _obscurePass ? 'Mostrar' : 'Ocultar',
                     ),
                   ),
-                  validator: (v) =>
-                      (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
+                  validator: (v) {
+                    if (v == null || v.length < 8) return 'Mínimo 8 caracteres';
+                    if (!RegExp(r'[A-Z]').hasMatch(v)) {
+                      return 'Debe contener al menos una mayúscula';
+                    }
+                    if (!RegExp(r'[0-9]').hasMatch(v)) {
+                      return 'Debe contener al menos un número';
+                    }
+                    return null;
+                  },
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),

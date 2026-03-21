@@ -140,6 +140,22 @@ class PetProfileUseCase:
         if pet.owner_id != requester_id:
             raise DomainError("Acceso denegado: no eres el dueño de esta mascota.")
 
+        from backend.domain.aggregates.pet_profile import (
+            CatActivityLevel,
+            CurrentDiet as CurrentDietEnum,
+            DogActivityLevel,
+            Species,
+        )
+        if 'activity_level' in update_data and isinstance(update_data['activity_level'], str):
+            al_str = update_data['activity_level']
+            species_val = pet.species.value if hasattr(pet.species, 'value') else str(pet.species)
+            if species_val == 'perro':
+                update_data['activity_level'] = DogActivityLevel(al_str)
+            else:
+                update_data['activity_level'] = CatActivityLevel(al_str)
+        if 'current_diet' in update_data and isinstance(update_data['current_diet'], str):
+            update_data['current_diet'] = CurrentDietEnum(update_data['current_diet'])
+
         for field_name, value in update_data.items():
             if hasattr(pet, field_name):
                 object.__setattr__(pet, field_name, value)

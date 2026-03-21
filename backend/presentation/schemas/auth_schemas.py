@@ -4,6 +4,9 @@ Todos los campos con validación estricta — nunca raw dict en endpoints.
 """
 from __future__ import annotations
 
+import uuid
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, field_validator
 
 from backend.domain.aggregates.user_account import UserRole
@@ -15,6 +18,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     role: UserRole = UserRole.OWNER
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
 
     @field_validator("password")
     @classmethod
@@ -50,3 +55,14 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class UserProfileResponse(BaseModel):
+    """Respuesta del perfil del usuario autenticado."""
+
+    user_id: uuid.UUID
+    email: str
+    role: str
+    tier: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None

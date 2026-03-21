@@ -1,8 +1,10 @@
 """
 Router de autenticación — FastAPI.
-Endpoints: /v1/auth/register, /v1/auth/login, /v1/auth/refresh, /v1/auth/logout.
+Endpoints: /v1/auth/register, /v1/auth/login, /v1/auth/refresh, /v1/auth/logout, /v1/auth/me.
 """
 from __future__ import annotations
+
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,18 +14,19 @@ from backend.application.use_cases.auth_use_case import (
     TokenResponse as UseCaseTokenResponse,
 )
 from backend.domain.exceptions.domain_errors import DomainError
-from backend.infrastructure.auth.jwt_service import JWTService
+from backend.infrastructure.auth.jwt_service import JWTService, TokenPayload
 from backend.infrastructure.auth.password_service import PasswordService
 from backend.infrastructure.db.session import get_db_session
 from backend.infrastructure.db.token_repository import PostgreSQLTokenRepository
 from backend.infrastructure.db.user_repository import PostgreSQLUserRepository
-from backend.presentation.middleware.auth_middleware import get_jwt_service
+from backend.presentation.middleware.auth_middleware import get_current_user, get_jwt_service
 from backend.presentation.schemas.auth_schemas import (
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
     RegisterRequest,
     TokenResponse,
+    UserProfileResponse,
 )
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -66,6 +69,8 @@ async def register(
             email=str(body.email),
             password=body.password,
             role=body.role,
+            full_name=body.full_name,
+            phone=body.phone,
         )
     except DomainError as exc:
         raise HTTPException(
@@ -158,3 +163,52 @@ async def logout(
     """
     uc = _build_use_case(session, jwt_service)
     await uc.logout(refresh_token=body.refresh_token)
+
+
+@router.get(
+    "/me",
+    response_model=UserProfileResponse,
+    summary="Perfil del usuario autenticado",
+)
+async def get_me(
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(get_current_user),
+) -> UserProfileResponse:
+    """Obtiene el perfil del usuario autenticado."""
+    user_repo = PostgreSQLUserRepository(session)
+    user_obj = await user_repo.find_by_id(user.user_id)
+    if user_obj is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+    return UserProfileResponse(
+        user_id=user_obj.id,
+        email=user_obj.email,
+        role=user_obj.role.value,
+        tier=user_obj.tier.value,
+        full_name=user_obj.full_name,
+        phone=user_obj.phone,
+    )
+
+
+@router.get(
+    "/vet/{vet_id}/profile",
+    response_model=UserProfileResponse,
+    summary="Perfil público de un veterinario",
+)
+async def get_vet_profile(
+    vet_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(get_current_user),
+) -> UserProfileResponse:
+    """Obtiene el perfil público de un veterinario (nombre y contacto)."""
+    user_repo = PostgreSQLUserRepository(session)
+    vet = await user_repo.find_by_id(vet_id)
+    if vet is None or vet.role.value != 'vet':
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Veterinario no encontrado.")
+    return UserProfileResponse(
+        user_id=vet.id,
+        email=vet.email,
+        role=vet.role.value,
+        tier=vet.tier.value,
+        full_name=vet.full_name,
+        phone=vet.phone,
+    )

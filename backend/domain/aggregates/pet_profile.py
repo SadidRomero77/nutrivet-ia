@@ -4,6 +4,7 @@ Encapsula los 13 campos obligatorios con sus invariantes de dominio.
 """
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
 from uuid import UUID
 
 from backend.domain.exceptions.domain_errors import DomainError, InvalidWeightError
@@ -112,6 +113,8 @@ class PetProfile:
     medical_conditions: list[MedicalCondition] = field(default_factory=list)
     allergies: list[str] = field(default_factory=list)
     current_diet: CurrentDiet = CurrentDiet.CONCENTRADO
+    is_clinic_pet: bool = False
+    vet_id: Optional[UUID] = None
 
     def __post_init__(self) -> None:
         """Valida todas las invariantes del aggregate al instanciar."""

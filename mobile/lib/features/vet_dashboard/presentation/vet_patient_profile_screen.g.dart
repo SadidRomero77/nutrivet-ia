@@ -6,7 +6,7 @@ part of 'vet_patient_profile_screen.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$vetPatientHash() => r'57ba8ec8ea89a4847ac2baf7541c37febae5c1ef';
+String _$vetPatientHash() => r'1a002d44db67cbec9c1e11f91e44b3d4db784fc4';
 
 /// Copied from Dart SDK
 class _SystemHash {

@@ -329,6 +329,7 @@ def _vet_pet_to_response(pet: Any) -> PetResponse:
         medical_conditions=[c.value for c in pet.medical_conditions],
         allergies=pet.allergies,
         current_diet=pet.current_diet.value,
+        vet_id=pet.vet_id,
     )
 
 

@@ -27,6 +27,7 @@ class PetModel {
     required this.medicalConditions,
     required this.allergies,
     required this.currentFeedingType,
+    this.vetId,
   });
 
   factory PetModel.fromJson(Map<String, dynamic> json) => PetModel(
@@ -46,6 +47,7 @@ class PetModel {
         ),
         allergies: List<String>.from(json['allergies'] as List? ?? []),
         currentFeedingType: json['current_diet'] as String,
+        vetId: json['vet_id'] as String?,
       );
 
   final String petId;
@@ -62,6 +64,7 @@ class PetModel {
   final List<String> medicalConditions;
   final List<String> allergies;
   final String currentFeedingType;
+  final String? vetId;
 }
 
 @riverpod

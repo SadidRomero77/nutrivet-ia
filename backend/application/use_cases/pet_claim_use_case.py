@@ -79,6 +79,8 @@ class PetClaimUseCase:
         pet = PetProfile(
             pet_id=uuid.uuid4(),
             owner_id=vet_id,  # se actualizará al hacer claim
+            is_clinic_pet=True,
+            vet_id=vet_id,
             **pet_data,
         )
         await self._pet_repo.save(pet)

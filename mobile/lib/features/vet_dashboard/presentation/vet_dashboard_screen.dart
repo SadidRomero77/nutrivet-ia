@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/utils/responsive.dart';
+import '../../../core/widgets/app_drawer.dart';
 import '../../../core/widgets/app_footer.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../pet/data/pet_repository.dart';
@@ -53,21 +54,62 @@ class VetDashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
+        drawer: const AppDrawer(),
         body: const TabBarView(
           children: [
             _PendingPlansTab(),
             _PatientsTab(),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          key: const ValueKey('create_clinic_pet_fab'),
-          onPressed: () async {
-            await context.push('/vet/patients/new');
-            // Invalida el caché al regresar para reflejar el nuevo paciente
-            ref.invalidate(_vetPatientsProvider);
-          },
-          icon: const Icon(Icons.add),
-          label: const Text('Agregar paciente'),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Burbuja del agente para el vet
+              FloatingActionButton(
+                key: const ValueKey('vet_chat_fab'),
+                heroTag: 'vet_chat_fab',
+                onPressed: () {
+                  final patients =
+                      ref.read(_vetPatientsProvider).valueOrNull ?? [];
+                  if (patients.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Agrega un paciente primero')),
+                    );
+                    return;
+                  }
+                  if (patients.length == 1) {
+                    context.push('/chat?petId=${patients.first.petId}');
+                    return;
+                  }
+                  showPetPickerSheet(
+                    context: context,
+                    pets: patients,
+                    title: 'Consultar sobre...',
+                    onPick: (pet) =>
+                        context.push('/chat?petId=${pet.petId}'),
+                  );
+                },
+                backgroundColor: Theme.of(context).colorScheme.tertiary,
+                foregroundColor: Colors.white,
+                tooltip: 'Consultar al agente',
+                child: const Icon(Icons.chat_bubble_outline),
+              ),
+              FloatingActionButton.extended(
+                key: const ValueKey('create_clinic_pet_fab'),
+                heroTag: 'create_clinic_pet_fab',
+                onPressed: () async {
+                  await context.push('/vet/patients/new');
+                  ref.invalidate(_vetPatientsProvider);
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar paciente'),
+              ),
+            ],
+          ),
         ),
         bottomNavigationBar: const AppFooter(),
       ),
