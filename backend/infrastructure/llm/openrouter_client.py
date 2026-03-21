@@ -11,11 +11,14 @@ Características:
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 # Fallback chain si el modelo primario falla
@@ -115,10 +118,11 @@ class OpenRouterClient:
                         except Exception as fe:
                             last_error = fe
 
-        raise RuntimeError(
-            f"OpenRouter: todos los intentos fallaron para modelo '{model}'. "
-            f"Último error: {last_error}"
+        logger.error(
+            "OpenRouter: todos los intentos fallaron para modelo '%s'. Error: %s",
+            model, type(last_error).__name__,
         )
+        raise RuntimeError("El servicio de IA no está disponible temporalmente. Intenta de nuevo.")
 
     async def _call(
         self,
@@ -149,9 +153,17 @@ class OpenRouterClient:
             resp.raise_for_status()
 
         latency_ms = int((time.monotonic() - start) * 1000)
-        data = resp.json()
 
-        choice = data["choices"][0]["message"]["content"]
+        try:
+            data = resp.json()
+        except Exception as parse_err:
+            raise ValueError(f"Respuesta JSON inválida de OpenRouter: {type(parse_err).__name__}") from parse_err
+
+        try:
+            choice = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as struct_err:
+            raise ValueError(f"Estructura de respuesta inesperada de OpenRouter: {type(struct_err).__name__}") from struct_err
+
         usage = data.get("usage", {})
 
         return LLMResponse(

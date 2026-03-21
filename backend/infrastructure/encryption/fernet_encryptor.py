@@ -13,11 +13,25 @@ from cryptography.fernet import Fernet
 
 
 def _get_fernet() -> Fernet:
-    """Obtiene la instancia Fernet usando la clave de entorno."""
+    """
+    Obtiene la instancia Fernet usando la clave de entorno.
+
+    CRITICAL: Si FERNET_KEY no está configurada, falla ruidosamente.
+    Una clave generada en memoria se pierde al reiniciar → todos los datos
+    médicos encriptados quedan irrecuperables (Constitution REGLA 6).
+
+    Para generar una clave válida:
+        python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    """
     key = os.environ.get("FERNET_KEY")
     if not key:
-        # En desarrollo usamos una clave generada en memoria — nunca en producción
-        key = Fernet.generate_key().decode()
+        raise RuntimeError(
+            "FERNET_KEY no está configurada. "
+            "Sin esta clave los datos médicos encriptados son irrecuperables al reiniciar. "
+            "Genera una con: python -c \"from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())\" "
+            "y agrégala a .env.dev o a las variables de entorno del contenedor."
+        )
     return Fernet(key.encode() if isinstance(key, str) else key)
 
 

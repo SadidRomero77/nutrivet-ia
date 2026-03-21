@@ -163,6 +163,7 @@ async def scan_label(
     pet_id: str,
     image: UploadFile = File(...),
     current_user=Depends(get_current_user),
+    session=Depends(get_db_session),
 ) -> ScanResult:
     """
     Escanea una etiqueta nutricional con gpt-4o (vision).
@@ -170,6 +171,29 @@ async def scan_label(
     Solo acepta imagen de tabla nutricional o lista de ingredientes.
     NUNCA logos, marcas o empaques frontales (Constitution REGLA 7).
     """
+    import uuid as _uuid
+
+    # Validar formato de pet_id
+    try:
+        pet_uuid = _uuid.UUID(pet_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pet_id inválido.")
+
+    # Validar que el usuario tiene acceso a esta mascota (Constitution REGLA 6)
+    pet_repo = PostgreSQLPetRepository(session)
+    pet = await pet_repo.find_by_id(pet_uuid)
+    if pet is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mascota no encontrada.")
+
+    is_owner = pet.owner_id == current_user.user_id
+    is_assigned_vet = (
+        current_user.role.value == "vet"
+        and pet.vet_id is not None
+        and pet.vet_id == current_user.user_id
+    )
+    if not (is_owner or is_assigned_vet):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado.")
+
     image_bytes = await image.read()
     mime_type = image.content_type or "image/jpeg"
 

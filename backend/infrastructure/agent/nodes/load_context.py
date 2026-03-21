@@ -50,6 +50,10 @@ async def load_context(
     """
     Carga PetProfile y plan activo desde DB.
 
+    Valida que el usuario autenticado tiene acceso a la mascota:
+    - owner: solo puede acceder a sus propias mascotas (pet.owner_id == user_id)
+    - vet: puede acceder a mascotas asignadas (pet.vet_id == user_id) o propias
+
     Si la mascota no existe → error en state.
     Si no hay plan activo → active_plan = None.
     """
@@ -62,11 +66,25 @@ async def load_context(
     try:
         pet_id = uuid.UUID(pet_id_str)
     except ValueError:
-        return {**state, "pet_profile": None, "active_plan": None, "error": f"pet_id inválido: {pet_id_str}"}
+        return {**state, "pet_profile": None, "active_plan": None, "error": "pet_id con formato inválido"}
 
     pet = await pet_repo.find_by_id(pet_id)
     if pet is None:
-        return {**state, "pet_profile": None, "active_plan": None, "error": f"Mascota '{pet_id_str}' no encontrada"}
+        return {**state, "pet_profile": None, "active_plan": None, "error": "Mascota no encontrada"}
+
+    # Validación de acceso — Constitution REGLA 6 (aislamiento de datos)
+    user_id_str = state.get("user_id", "")
+    user_role = state.get("user_role", "owner")
+    try:
+        requester_id = uuid.UUID(user_id_str)
+    except ValueError:
+        return {**state, "pet_profile": None, "active_plan": None, "error": "Sesión inválida"}
+
+    is_owner = pet.owner_id == requester_id
+    is_assigned_vet = user_role == "vet" and pet.vet_id is not None and pet.vet_id == requester_id
+
+    if not (is_owner or is_assigned_vet):
+        return {**state, "pet_profile": None, "active_plan": None, "error": "Acceso denegado a esta mascota"}
 
     pet_dict = _pet_to_dict(pet)
 
