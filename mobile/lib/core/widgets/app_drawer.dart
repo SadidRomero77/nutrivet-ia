@@ -48,25 +48,11 @@ class AppDrawer extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(30),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.pets, color: Colors.white, size: 28),
+                Image.asset(
+                  'assets/images/Logo.png',
+                  height: 64,
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'NutriVet.IA',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
-                ),
+                const SizedBox(height: 10),
                 if (profile?.fullName != null)
                   Text(
                     profile!.fullName!,
