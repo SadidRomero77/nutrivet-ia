@@ -13,6 +13,7 @@ import 'package:uuid/uuid.dart' show Uuid;
 
 import '../data/agent_repository.dart';
 
+
 const _disclaimer =
     'NutriVet.IA responde solo consultas nutricionales. '
     'Para consultas médicas, contacta a tu veterinario.';
@@ -32,6 +33,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _conversationId = const Uuid().v4();
   final List<_ChatMessage> _messages = [];
   bool _sending = false;
+  bool _loadingHistory = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final history = await ref
+          .read(agentRepositoryProvider)
+          .loadHistory(widget.petId);
+      if (mounted && history.isNotEmpty) {
+        setState(() {
+          _messages.addAll(
+            history.map(
+              (m) => _ChatMessage(text: m.content, isUser: m.isUser),
+            ),
+          );
+        });
+        // Scroll al último mensaje después de cargar historial
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
+    } catch (_) {
+      // Historial no disponible — el chat arranca vacío sin bloquear
+    } finally {
+      if (mounted) setState(() => _loadingHistory = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -114,14 +145,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (_loadingHistory)
+            const LinearProgressIndicator(minHeight: 2),
           Expanded(
-            child: ListView.builder(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, i) =>
-                  _MessageBubble(message: _messages[i]),
-            ),
+            child: _messages.isEmpty && !_loadingHistory
+                ? const Center(
+                    child: Text(
+                      'Escribe tu primera pregunta sobre nutrición.',
+                      style: TextStyle(color: Colors.black45),
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollCtrl,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, i) =>
+                        _MessageBubble(message: _messages[i]),
+                  ),
           ),
           _InputBar(
             controller: _msgCtrl,

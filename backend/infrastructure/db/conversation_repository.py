@@ -85,3 +85,34 @@ class PostgreSQLConversationRepository:
             messages.append({"role": "assistant", "content": row.response})
 
         return messages
+
+    async def list_for_display(
+        self,
+        pet_id: str,
+        limit: int = 30,
+    ) -> list[dict]:
+        """
+        Retorna los últimos N intercambios en formato de visualización para Flutter.
+
+        Cada elemento tiene: role ('user'|'agent'), content, created_at (ISO8601).
+
+        Args:
+            pet_id: ID de la mascota.
+            limit: Máximo de intercambios (no mensajes) a retornar.
+        """
+        stmt = (
+            select(ConversationModel)
+            .where(ConversationModel.pet_id == uuid.UUID(pet_id))
+            .order_by(ConversationModel.created_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        rows = result.scalars().all()
+
+        messages: list[dict] = []
+        for row in reversed(rows):
+            ts = row.created_at.isoformat() if row.created_at else None
+            messages.append({"role": "user", "content": row.message, "created_at": ts})
+            messages.append({"role": "agent", "content": row.response, "created_at": ts})
+
+        return messages

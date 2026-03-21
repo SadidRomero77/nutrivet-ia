@@ -13,18 +13,25 @@ GET   /v1/vet/plans/pending          — lista PENDING_VET para vet dashboard
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from backend.application.use_cases.hitl_review_use_case import HitlReviewUseCase
 from backend.application.use_cases.ingredient_substitution_use_case import (
     IngredientSubstitutionUseCase,
 )
 from backend.application.use_cases.plan_generation_use_case import PlanGenerationUseCase
+from backend.domain.aggregates.user_account import UserTier
 from backend.domain.exceptions.domain_errors import DomainError
+from backend.infrastructure.db.session import AsyncSessionLocal
+from backend.infrastructure.workers.plan_generation_worker import PlanGenerationWorker
 from backend.infrastructure.auth.jwt_service import TokenPayload
 from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTraceRepository
 from sqlalchemy import select
@@ -53,6 +60,37 @@ from backend.presentation.schemas.plan_schemas import (
 
 router = APIRouter(tags=["plans"])
 vet_router = APIRouter(tags=["vet"])
+
+
+# ---------------------------------------------------------------------------
+# Background worker (dev) — corre PlanGenerationWorker sin ARQ/Redis
+# ---------------------------------------------------------------------------
+
+async def _run_worker_background(job_id: uuid.UUID, user_tier: UserTier) -> None:
+    """
+    Ejecuta el PlanGenerationWorker en una sesión DB propia.
+
+    En producción este rol lo cumple el ARQ worker (Celery-like sobre Redis).
+    Para dev y staging sin Redis, FastAPI BackgroundTasks es suficiente.
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTraceRepository
+            from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
+            from backend.infrastructure.db.plan_job_repository import PostgreSQLPlanJobRepository
+            from backend.infrastructure.db.plan_repository import PostgreSQLPlanRepository
+            worker = PlanGenerationWorker(
+                pet_repo=PostgreSQLPetRepository(session),
+                plan_repo=PostgreSQLPlanRepository(session),
+                job_repo=PostgreSQLPlanJobRepository(session),
+                trace_repo=PostgreSQLAgentTraceRepository(session),
+            )
+            await worker.execute(job_id=job_id, user_tier=user_tier)
+            await session.commit()
+            logger.info("plan_generation_worker completado job=%s", job_id)
+        except Exception:
+            await session.rollback()
+            logger.exception("plan_generation_worker falló job=%s", job_id)
 
 
 # ---------------------------------------------------------------------------
@@ -166,10 +204,16 @@ def _plan_to_summary(plan: Any) -> PlanSummaryResponse:
 @router.post("/v1/plans/generate", response_model=PlanJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_plan(
     body: PlanGenerateRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(require_role("owner")),
 ) -> PlanJobResponse:
-    """Encola job de generación de plan. Retorna job_id para polling."""
+    """
+    Encola job de generación de plan. Retorna job_id para polling.
+
+    El worker corre como BackgroundTask (dev) con su propia sesión DB.
+    En producción equivale al ARQ worker sobre Redis.
+    """
     try:
         uc = _gen_use_case(session)
         job_id = await uc.enqueue(
@@ -178,6 +222,11 @@ async def generate_plan(
             user_tier=user.tier,
             modality=body.modality,
         )
+        # Commit explícito ANTES de disparar background task para evitar
+        # condición de carrera: el worker crea su propia sesión y necesita
+        # que el job ya esté persistido en DB.
+        await session.commit()
+        background_tasks.add_task(_run_worker_background, job_id, user.tier)
         return PlanJobResponse(job_id=job_id, status="QUEUED")
     except DomainError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e

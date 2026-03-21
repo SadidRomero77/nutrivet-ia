@@ -20,7 +20,7 @@ class TestLLMRouter:
     def test_free_tier_0_cond_llama(self) -> None:
         """Free + 0 condiciones → llama-3.3-70b."""
         model = LLMRouter.select_model(UserTier.FREE, conditions_count=0)
-        assert model == "meta-llama/llama-3.3-70b"
+        assert model == "meta-llama/llama-3.3-70b-instruct:free"
 
     def test_basico_tier_gpt4o_mini(self) -> None:
         """Básico + 1 condición → gpt-4o-mini."""
@@ -35,27 +35,27 @@ class TestLLMRouter:
     def test_premium_tier_claude(self) -> None:
         """Premium + 2 condiciones → claude-sonnet-4-5."""
         model = LLMRouter.select_model(UserTier.PREMIUM, conditions_count=2)
-        assert model == "anthropic/claude-sonnet-4-5"
+        assert model == "anthropic/claude-sonnet-4.5"
 
     def test_vet_tier_claude(self) -> None:
         """Vet tier → claude-sonnet-4-5."""
         model = LLMRouter.select_model(UserTier.VET, conditions_count=0)
-        assert model == "anthropic/claude-sonnet-4-5"
+        assert model == "anthropic/claude-sonnet-4.5"
 
     def test_llm_router_3_condiciones_override(self) -> None:
         """Free + 3 condiciones → claude-sonnet-4-5 (override REGLA 5)."""
         model = LLMRouter.select_model(UserTier.FREE, conditions_count=3)
-        assert model == "anthropic/claude-sonnet-4-5"
+        assert model == "anthropic/claude-sonnet-4.5"
 
     def test_llm_router_5_condiciones_override(self) -> None:
         """Free + 5 condiciones → claude-sonnet-4-5 (Sally case)."""
         model = LLMRouter.select_model(UserTier.FREE, conditions_count=5)
-        assert model == "anthropic/claude-sonnet-4-5"
+        assert model == "anthropic/claude-sonnet-4.5"
 
     def test_basico_3_condiciones_override(self) -> None:
         """Básico + 3 condiciones → override a claude-sonnet-4-5."""
         model = LLMRouter.select_model(UserTier.BASICO, conditions_count=3)
-        assert model == "anthropic/claude-sonnet-4-5"
+        assert model == "anthropic/claude-sonnet-4.5"
 
     def test_llm_router_es_determinista(self) -> None:
         """Mismo input → mismo output siempre."""
@@ -67,7 +67,7 @@ class TestLLMRouter:
         """Sally: free + 5 condiciones → claude-sonnet-4-5 (Golden case G8)."""
         # French Poodle: Diabetes + Hepatopatía + Gastritis + Cistitis + Hipotiroidismo
         model = LLMRouter.select_model(UserTier.FREE, conditions_count=5)
-        assert model == "anthropic/claude-sonnet-4-5"
+        assert model == "anthropic/claude-sonnet-4.5"
 
     def test_no_existe_metodo_update(self) -> None:
         """LLMRouter es stateless — no tiene estado mutable."""

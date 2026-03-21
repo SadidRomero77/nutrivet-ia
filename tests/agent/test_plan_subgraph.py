@@ -133,7 +133,7 @@ class TestSelectLLM:
         """FREE tier, 0 condiciones → llama-3.3-70b."""
         state = _state_with_pet(user_tier="FREE", conditions=[])
         result = nodo_5_select_llm(state)
-        assert result["llm_model"] == "meta-llama/llama-3.3-70b"
+        assert result["llm_model"] == "meta-llama/llama-3.3-70b-instruct:free"
 
     def test_sally_override_clinico_usa_claude(self) -> None:
         """5 condiciones médicas → claude-sonnet-4-5 (override REGLA 5)."""
@@ -143,13 +143,13 @@ class TestSelectLLM:
                         "cistitis/enfermedad_urinaria", "hipotiroideo"],
         )
         result = nodo_5_select_llm(state)
-        assert result["llm_model"] == "anthropic/claude-sonnet-4-5"
+        assert result["llm_model"] == "anthropic/claude-sonnet-4.5"
 
     def test_premium_tier_usa_claude(self) -> None:
         """PREMIUM tier → claude-sonnet-4-5."""
         state = _state_with_pet(user_tier="PREMIUM", conditions=[])
         result = nodo_5_select_llm(state)
-        assert result["llm_model"] == "anthropic/claude-sonnet-4-5"
+        assert result["llm_model"] == "anthropic/claude-sonnet-4.5"
 
 
 # ─── Nodo 7: validate_output ──────────────────────────────────────────────────
@@ -230,7 +230,7 @@ class TestDetermineHITL:
     def test_plan_acumula_traces_en_state(self) -> None:
         """State preserva agent_traces acumulados."""
         state = _state_with_pet()
-        state["agent_traces"] = [{"llm_model": "meta-llama/llama-3.3-70b", "latency_ms": 1200}]
+        state["agent_traces"] = [{"llm_model": "meta-llama/llama-3.3-70b-instruct:free", "latency_ms": 1200}]
         result = nodo_9_determine_hitl(state)
         assert len(result["agent_traces"]) == 1
 

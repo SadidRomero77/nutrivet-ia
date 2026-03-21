@@ -2,28 +2,30 @@
 LLMRouter — Routing determinístico de modelos LLM por tier y condiciones médicas.
 
 Constitution REGLA 5 (no negociable):
-  Free tier                → meta-llama/llama-3.3-70b
+  Free tier                → meta-llama/llama-3.3-70b-instruct:free
   Básico tier              → openai/gpt-4o-mini
-  Premium / Vet tier       → anthropic/claude-sonnet-4-5
-  3+ condiciones (any tier)→ anthropic/claude-sonnet-4-5  ← override no negociable
+  Premium / Vet tier       → anthropic/claude-sonnet-4.5
+  3+ condiciones (any tier)→ anthropic/claude-sonnet-4.5  ← override no negociable
   OCR (todos los tiers)    → openai/gpt-4o (vision) — ver select_ocr_model()
 
 Nunca llamar LLMs locales (Ollama) para generación de planes — ver ADR-019.
+
+IDs verificados contra OpenRouter API (2026-03-21).
 """
 from __future__ import annotations
 
 from backend.domain.aggregates.user_account import UserTier
 
-# Modelos por tier (proveedor: OpenRouter)
+# Modelos por tier (proveedor: OpenRouter) — IDs exactos verificados
 _MODEL_BY_TIER: dict[UserTier, str] = {
-    UserTier.FREE: "meta-llama/llama-3.3-70b",
+    UserTier.FREE: "meta-llama/llama-3.3-70b-instruct:free",
     UserTier.BASICO: "openai/gpt-4o-mini",
-    UserTier.PREMIUM: "anthropic/claude-sonnet-4-5",
-    UserTier.VET: "anthropic/claude-sonnet-4-5",
+    UserTier.PREMIUM: "anthropic/claude-sonnet-4.5",
+    UserTier.VET: "anthropic/claude-sonnet-4.5",
 }
 
 # Override clínico: 3+ condiciones médicas → modelo máximo
-_CLINICAL_OVERRIDE_MODEL = "anthropic/claude-sonnet-4-5"
+_CLINICAL_OVERRIDE_MODEL = "anthropic/claude-sonnet-4.5"
 _CLINICAL_OVERRIDE_THRESHOLD = 3
 
 # Modelo OCR (siempre, independiente del tier)
