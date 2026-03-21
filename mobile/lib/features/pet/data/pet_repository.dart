@@ -96,7 +96,7 @@ class PetRepository {
       final pets = (response.data!)
           .map((e) => PetModel.fromJson(e as Map<String, dynamic>))
           .toList();
-      // Guardar en cache local como Map, no como PetModel
+      // Guardar en cache local como Map incluyendo todos los campos
       for (final pet in pets) {
         await box.put(pet.petId, {
           'pet_id': pet.petId,
@@ -113,6 +113,10 @@ class PetRepository {
           'medical_conditions': pet.medicalConditions,
           'allergies': pet.allergies,
           'current_diet': pet.currentFeedingType,
+          'vet_id': pet.vetId,
+          'owner_name': pet.ownerName,
+          'owner_phone': pet.ownerPhone,
+          'claim_code': pet.claimCode,
         });
       }
       return pets;

@@ -4,6 +4,7 @@ library;
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/api/api_client.dart';
@@ -58,6 +59,7 @@ class VetRepository {
   VetRepository({required this.dio});
 
   final Dio dio;
+  static const _patientsBoxName = 'vet_patients';
 
   /// Lista planes PENDING_VET para revisión del vet.
   Future<List<VetPendingPlan>> listPendingPlans() async {
@@ -67,12 +69,45 @@ class VetRepository {
         .toList();
   }
 
-  /// Lista ClinicPets creados por el vet.
+  /// Lista ClinicPets creados por el vet. Usa cache Hive si sin red.
   Future<List<PetModel>> listPatients() async {
-    final response = await dio.get<List<dynamic>>('/v1/vet/patients');
-    return (response.data!)
-        .map((e) => PetModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final box = await Hive.openBox<Map>(_patientsBoxName);
+    try {
+      final response = await dio.get<List<dynamic>>('/v1/vet/patients');
+      final patients = (response.data!)
+          .map((e) => PetModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      // Actualizar cache incluyendo campos de pacientes clínicos
+      await box.clear();
+      for (final p in patients) {
+        await box.put(p.petId, {
+          'pet_id': p.petId,
+          'name': p.name,
+          'species': p.species,
+          'breed': p.breed,
+          'sex': p.sex,
+          'age_months': p.ageMonths,
+          'weight_kg': p.weightKg,
+          'size': p.size,
+          'reproductive_status': p.reproductiveStatus,
+          'activity_level': p.activityLevel,
+          'bcs': p.bcs,
+          'medical_conditions': p.medicalConditions,
+          'allergies': p.allergies,
+          'current_diet': p.currentFeedingType,
+          'vet_id': p.vetId,
+          'owner_name': p.ownerName,
+          'owner_phone': p.ownerPhone,
+          'claim_code': p.claimCode,
+        });
+      }
+      return patients;
+    } on DioException {
+      // Fallback offline
+      return box.values
+          .map((e) => PetModel.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
   }
 
   /// Obtiene un paciente clínico por ID con datos del propietario y claim_code.

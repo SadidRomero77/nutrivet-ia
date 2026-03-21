@@ -367,11 +367,11 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
       );
       _jobId = job.jobId;
       await _pollUntilReady(repo);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _statusMsg = 'Error: $e';
+          _statusMsg = 'Error al iniciar la generación del plan. Intenta de nuevo.';
         });
       }
     }
@@ -379,26 +379,33 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
 
   Future<void> _pollUntilReady(PlanRepository repo) async {
     if (_jobId == null) return;
-    for (var i = 0; i < 60; i++) {
-      await Future<void>.delayed(const Duration(seconds: 3));
+    // Hasta 10 minutos: 120 intentos × 5s = 600s
+    // Casos con 3+ condiciones médicas usan claude-sonnet-4-5 → pueden tomar más tiempo
+    for (var i = 0; i < 120; i++) {
+      await Future<void>.delayed(const Duration(seconds: 5));
       if (!mounted) return;
-      final job = await repo.getJobStatus(_jobId!);
-      setState(() => _statusMsg = _jobStatusLabel(job.status));
-      if (job.isReady && job.planId != null) {
-        if (mounted) context.go('/plan/${job.planId}');
-        return;
-      }
-      if (job.isFailed) {
-        setState(() {
-          _loading = false;
-          _statusMsg = 'No fue posible generar el plan. Intenta de nuevo o contacta soporte.';
-        });
-        return;
+      try {
+        final job = await repo.getJobStatus(_jobId!);
+        setState(() => _statusMsg = _jobStatusLabel(job.status));
+        if (job.isReady && job.planId != null) {
+          if (mounted) context.go('/plan/${job.planId}');
+          return;
+        }
+        if (job.isFailed) {
+          setState(() {
+            _loading = false;
+            _statusMsg = 'No fue posible generar el plan. Intenta de nuevo o contacta soporte.';
+          });
+          return;
+        }
+      } on Exception {
+        // Error de red durante polling — continuar hasta agotar intentos
       }
     }
     setState(() {
       _loading = false;
-      _statusMsg = 'Tiempo de espera agotado. Intenta de nuevo.';
+      _statusMsg = 'La generación está tomando más de lo esperado. '
+          'Revisa "Mis planes" en unos minutos — el plan puede estar listo.';
     });
   }
 
