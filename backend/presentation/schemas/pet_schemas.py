@@ -78,6 +78,10 @@ class PetResponse(BaseModel):
     allergies: list[str]
     current_diet: str
     vet_id: Optional[uuid.UUID] = None
+    # Campos exclusivos de pacientes clínicos (solo presentes en endpoints vet)
+    owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
+    claim_code: Optional[str] = None
 
 
 class WeightRecordResponse(BaseModel):

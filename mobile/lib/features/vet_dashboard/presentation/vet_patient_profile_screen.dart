@@ -5,6 +5,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -191,6 +192,19 @@ class _PatientContent extends StatelessWidget {
           title: 'Alimentación actual',
           rows: [_InfoRow('Tipo', pet.currentFeedingType)],
         ),
+
+        // Propietario (solo si el vet capturó los datos)
+        if (pet.ownerName != null || pet.ownerPhone != null)
+          _InfoCard(
+            title: 'Propietario',
+            rows: [
+              if (pet.ownerName != null) _InfoRow('Nombre', pet.ownerName!),
+              if (pet.ownerPhone != null) _InfoRow('Teléfono', pet.ownerPhone!),
+            ],
+          ),
+
+        // Código de vinculación (solo si el paciente aún no fue reclamado)
+        if (pet.claimCode != null) _ClaimCodeCard(code: pet.claimCode!),
       ],
     ),
       ),
@@ -314,6 +328,104 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Tarjeta de código de vinculación ─────────────────────────────────────────
+
+class _ClaimCodeCard extends StatelessWidget {
+  const _ClaimCodeCard({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: theme.colorScheme.tertiaryContainer.withAlpha(80),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.link, color: theme.colorScheme.tertiary, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Código de vinculación',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.tertiary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Este paciente aún no ha sido reclamado por su propietario.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: theme.colorScheme.tertiaryContainer),
+                    ),
+                    child: Text(
+                      code,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 6,
+                        color: theme.colorScheme.tertiary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: theme.colorScheme.tertiary,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.copy, size: 20),
+                  tooltip: 'Copiar código',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Código copiado al portapapeles'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Comparte este código con el propietario para que lo ingrese '
+              'en "Vincular mascota clínica" en la app.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

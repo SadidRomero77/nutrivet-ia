@@ -300,6 +300,8 @@ class _PatientCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasOwner = pet.ownerName != null;
+    final isClaimed = pet.claimCode == null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -315,9 +317,36 @@ class _PatientCard extends StatelessWidget {
           pet.name,
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
-        subtitle: Text(
-          '${pet.breed} · ${pet.weightKg} kg · BCS ${pet.bcs}/9',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${pet.breed} · ${pet.weightKg} kg · BCS ${pet.bcs}/9'),
+            if (hasOwner)
+              Text(
+                'Propietario: ${pet.ownerName}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            if (!isClaimed)
+              Row(
+                children: [
+                  Icon(Icons.link_off,
+                      size: 12, color: theme.colorScheme.tertiary),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Sin vincular',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.tertiary,
+                    ),
+                  ),
+                ],
+              ),
+          ],
         ),
+        isThreeLine: hasOwner || !isClaimed,
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
       ),

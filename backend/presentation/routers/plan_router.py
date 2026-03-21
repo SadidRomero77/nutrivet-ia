@@ -27,6 +27,8 @@ from backend.application.use_cases.plan_generation_use_case import PlanGeneratio
 from backend.domain.exceptions.domain_errors import DomainError
 from backend.infrastructure.auth.jwt_service import TokenPayload
 from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTraceRepository
+from sqlalchemy import select
+from backend.infrastructure.db.models import ClaimCodeModel
 from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
 from backend.infrastructure.db.plan_job_repository import PostgreSQLPlanJobRepository
 from backend.infrastructure.db.plan_repository import PostgreSQLPlanRepository
@@ -338,7 +340,56 @@ async def list_vet_patients(
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(require_role("vet")),
 ) -> list[PetResponse]:
-    """Lista ClinicPets creados por el vet autenticado."""
+    """Lista ClinicPets creados por el vet autenticado.
+
+    Incluye owner_name, owner_phone y claim_code activo (si no fue reclamado aún).
+    """
+    from backend.infrastructure.db.models import PetModel as PetORM
     pet_repo = PostgreSQLPetRepository(session)
-    pets = await pet_repo.list_clinic_by_vet(user.user_id)
-    return [_vet_pet_to_response(p) for p in pets]
+
+    # Query directa al ORM para acceder a owner_name_hint y owner_phone_hint
+    stmt = select(PetORM).where(
+        PetORM.vet_id == user.user_id,
+        PetORM.is_clinic_pet.is_(True),
+        PetORM.is_active.is_(True),
+    )
+    result = await session.execute(stmt)
+    models = result.scalars().all()
+
+    responses: list[PetResponse] = []
+    for model in models:
+        # Obtener claim code activo (sin usar) si existe
+        claim_stmt = select(ClaimCodeModel.code).where(
+            ClaimCodeModel.pet_id == model.id,
+            ClaimCodeModel.used.is_(False),
+        ).limit(1)
+        claim_result = await session.execute(claim_stmt)
+        claim_code = claim_result.scalar_one_or_none()
+
+        # Desencriptar campos médicos
+        enc = pet_repo._enc
+        conditions = enc.decrypt(model.medical_conditions_enc) if model.medical_conditions_enc else []
+        allergies = enc.decrypt(model.allergies_enc) if model.allergies_enc else []
+
+        responses.append(PetResponse(
+            pet_id=model.id,
+            owner_id=model.owner_id,
+            name=model.name,
+            species=model.species,
+            breed=model.breed,
+            sex=model.sex,
+            age_months=model.age_months,
+            weight_kg=model.weight_kg,
+            size=model.size,
+            reproductive_status=model.reproductive_status,
+            activity_level=model.activity_level,
+            bcs=model.bcs,
+            medical_conditions=conditions,
+            allergies=allergies,
+            current_diet=model.current_diet,
+            vet_id=model.vet_id,
+            owner_name=model.owner_name_hint,
+            owner_phone=model.owner_phone_hint,
+            claim_code=claim_code,
+        ))
+    return responses

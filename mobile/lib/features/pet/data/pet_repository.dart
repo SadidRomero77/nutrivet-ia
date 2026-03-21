@@ -28,6 +28,9 @@ class PetModel {
     required this.allergies,
     required this.currentFeedingType,
     this.vetId,
+    this.ownerName,
+    this.ownerPhone,
+    this.claimCode,
   });
 
   factory PetModel.fromJson(Map<String, dynamic> json) => PetModel(
@@ -48,6 +51,9 @@ class PetModel {
         allergies: List<String>.from(json['allergies'] as List? ?? []),
         currentFeedingType: json['current_diet'] as String,
         vetId: json['vet_id'] as String?,
+        ownerName: json['owner_name'] as String?,
+        ownerPhone: json['owner_phone'] as String?,
+        claimCode: json['claim_code'] as String?,
       );
 
   final String petId;
@@ -65,6 +71,10 @@ class PetModel {
   final List<String> allergies;
   final String currentFeedingType;
   final String? vetId;
+  // Campos exclusivos de pacientes clínicos (solo presentes en endpoints vet)
+  final String? ownerName;
+  final String? ownerPhone;
+  final String? claimCode;
 }
 
 @riverpod
