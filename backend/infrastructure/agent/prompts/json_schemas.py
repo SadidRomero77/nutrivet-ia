@@ -5,6 +5,7 @@ Diseñados para ser estrictos pero con fallbacks razonables.
 Usados tanto en nodo_7_validate_output (post-LLM) como en nutritional_validator.
 
 El esquema refleja la estructura exacta que el LLM debe generar según el plan_generation_prompts.
+Incluye todas las secciones del plan clínico de referencia (Lady Carolina Castañeda, MV, BAMPYSVET).
 """
 from __future__ import annotations
 
@@ -80,6 +81,9 @@ class ComidaDistribucion(BaseModel):
     horario: str = Field(..., description="Horario sugerido (mañana 7:00, tarde 17:00)")
     porcentaje: float = Field(..., gt=0, le=100)
     gramos: float = Field(..., gt=0)
+    proteina_g: float = Field(default=0.0, ge=0, description="Gramos de proteína en esta comida")
+    carbo_g: float = Field(default=0.0, ge=0, description="Gramos de carbohidrato en esta comida")
+    vegetal_g: float = Field(default=0.0, ge=0, description="Gramos de vegetal en esta comida")
 
 
 class PorcionDiariaSchema(BaseModel):
@@ -90,7 +94,7 @@ class PorcionDiariaSchema(BaseModel):
     g_por_comida: float = Field(..., gt=0)
     distribucion_comidas: list[ComidaDistribucion] = Field(
         default_factory=list,
-        description="Distribución horaria de las comidas",
+        description="Distribución horaria de las comidas con detalle por grupo",
     )
 
     @model_validator(mode="after")
@@ -129,6 +133,14 @@ class PreparacionSchema(BaseModel):
         default_factory=list,
         description="Advertencias de seguridad alimentaria",
     )
+    instrucciones_por_grupo: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Instrucciones específicas por grupo (proteínas, carbohidratos, vegetales)",
+    )
+    adiciones_permitidas: list[str] = Field(
+        default_factory=list,
+        description="Especias y adiciones seguras permitidas (cúrcuma, orégano, albahaca)",
+    )
 
 
 class FaseTransicion(BaseModel):
@@ -153,15 +165,35 @@ class TransicionSchema(BaseModel):
     )
 
 
+class SnackSaludableSchema(BaseModel):
+    """Opción de snack saludable para el paciente."""
+
+    nombre: str = Field(..., description="Nombre del snack")
+    descripcion: str = Field(..., description="Descripción corta y preparación")
+    cantidad_g: float = Field(..., gt=0, description="Cantidad máxima por ocasión en gramos")
+    frecuencia: str = Field(default="ocasional", description="Con qué frecuencia puede darse")
+
+
 class PlanOutputSchema(BaseModel):
     """
     Esquema completo del plan nutricional generado por el LLM.
 
     Este es el contrato que el LLM debe cumplir. El nodo_7_validate_output
     verifica que el JSON del LLM sea válido contra este esquema.
+
+    Basado en el plan clínico de referencia de Lady Carolina Castañeda (MV, BAMPYSVET).
     """
 
     perfil_nutricional: PerfilNutricionalSchema
+    objetivos_clinicos: list[str] = Field(
+        default_factory=list,
+        min_length=2,
+        description="3-4 objetivos clínicos personalizados para este paciente",
+    )
+    ingredientes_prohibidos: list[str] = Field(
+        default_factory=list,
+        description="Alimentos prohibidos específicos para este paciente por condición/alergia",
+    )
     ingredientes: list[IngredienteSchema] = Field(..., min_length=2)
     porciones: PorcionDiariaSchema
     suplementos: list[SupplementoSchema] = Field(
@@ -169,6 +201,14 @@ class PlanOutputSchema(BaseModel):
         description="Lista vacía si no hay suplementos recomendados",
     )
     instrucciones_preparacion: PreparacionSchema
+    snacks_saludables: list[SnackSaludableSchema] = Field(
+        default_factory=list,
+        description="Hasta 3 opciones de snacks saludables aprobados para este paciente",
+    )
+    protocolo_digestivo: list[str] = Field(
+        default_factory=list,
+        description="Qué hacer si hay síntomas GI durante el plan (vómito, diarrea, inapetencia)",
+    )
     transicion_dieta: TransicionSchema
     notas_clinicas: list[str] = Field(
         default_factory=list,
@@ -226,6 +266,16 @@ NO incluyas markdown (```json), NO texto antes o después del JSON.
     "kcal_verificadas": <float — suma de kcal de todos los ingredientes>,
     "relacion_ca_p": <float — ratio Calcio:Fósforo, debe estar entre 1.0 y 2.0>
   },
+  "objetivos_clinicos": [
+    "<objetivo 1 — personalizado para este paciente específico>",
+    "<objetivo 2>",
+    "<objetivo 3>",
+    "<objetivo 4>"
+  ],
+  "ingredientes_prohibidos": [
+    "<alimento prohibido específico para este paciente por condición o alergia>",
+    "<alimento prohibido 2>"
+  ],
   "ingredientes": [
     {
       "nombre": "<nombre en español, disponible en LATAM>",
@@ -243,7 +293,14 @@ NO incluyas markdown (```json), NO texto antes o después del JSON.
     "numero_comidas": <int — 2 a 4 comidas/día>,
     "g_por_comida": <float — total_g_dia / numero_comidas>,
     "distribucion_comidas": [
-      {"horario": "<mañana 7:00>", "porcentaje": <float>, "gramos": <float>}
+      {
+        "horario": "<mañana 7:00>",
+        "porcentaje": <float>,
+        "gramos": <float>,
+        "proteina_g": <float — gramos de proteína en esta comida>,
+        "carbo_g": <float — gramos de carbohidrato en esta comida>,
+        "vegetal_g": <float — gramos de vegetal en esta comida>
+      }
     ]
   },
   "suplementos": [
@@ -260,8 +317,30 @@ NO incluyas markdown (```json), NO texto antes o después del JSON.
     "pasos": ["<paso 1>", "<paso 2>", ...],
     "tiempo_preparacion_minutos": <int>,
     "almacenamiento": "<instrucciones de conservación>",
-    "advertencias": ["<advertencia 1>"]
+    "advertencias": ["<advertencia 1>"],
+    "instrucciones_por_grupo": {
+      "proteinas": ["<cómo cocinar las proteínas — temperatura, tiempo>"],
+      "carbohidratos": ["<cómo preparar los carbohidratos>"],
+      "vegetales": ["<cómo cocinar o servir los vegetales>"]
+    },
+    "adiciones_permitidas": [
+      "<especia o adición segura — e.g. cúrcuma 1/4 cucharadita, orégano seco>",
+      "<adición 2>"
+    ]
   },
+  "snacks_saludables": [
+    {
+      "nombre": "<nombre del snack>",
+      "descripcion": "<descripción y preparación simple>",
+      "cantidad_g": <float — gramos máximos por ocasión>,
+      "frecuencia": "<ocasional|2-3 veces/semana>"
+    }
+  ],
+  "protocolo_digestivo": [
+    "<qué hacer si hay vómito>",
+    "<qué hacer si hay diarrea>",
+    "<qué hacer si hay inapetencia por más de 24h>"
+  ],
   "transicion_dieta": {
     "requiere_transicion": <true|false>,
     "duracion_dias": <int — 7 a 14 días>,

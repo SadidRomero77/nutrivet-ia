@@ -199,24 +199,26 @@ void main() {
       expect(plan.perfilNutricional.weightPhase, equals('mantenimiento'));
     });
 
-    test('PlanDetail.fromJson — ingredientes con cantidad_gramos (no gramos)', () {
+    test('PlanDetail.fromJson — ingredientes con cantidad_g (campo correcto del LLM)', () {
       final plan = PlanDetail.fromJson(_buildPlanJson());
       expect(plan.ingredientes, isNotEmpty);
       expect(plan.ingredientes.first.nombre, equals('Pollo cocido'));
-      expect(plan.ingredientes.first.cantidadGramos, equals(150.0));
-      // El campo es cantidadGramos, NO gramos
+      expect(plan.ingredientes.first.cantidadG, equals(150.0));
+      // El campo es cantidadG (del LLM), NO cantidad_gramos
     });
 
     test('PlanDetail.fromJson — porciones correctas', () {
       final plan = PlanDetail.fromJson(_buildPlanJson());
       expect(plan.porciones.comidasPorDia, equals(2));
-      expect(plan.porciones.porcionPorComidaGramos, equals(75.0));
+      // gPorComida mapea desde porcion_por_comida_gramos (retrocompat) o g_por_comida
+      expect(plan.porciones.gPorComida, equals(75.0));
     });
 
     test('PlanDetail.fromJson — instrucciones de preparación', () {
       final plan = PlanDetail.fromJson(_buildPlanJson());
       expect(plan.instruccionesPreparacion.pasos, isNotEmpty);
-      expect(plan.instruccionesPreparacion.tiempoEstimadoMinutos, equals(20));
+      // tiempoPreparacionMinutos mapea desde tiempo_estimado_minutos o tiempo_preparacion_minutos
+      expect(plan.instruccionesPreparacion.tiempoPreparacionMinutos, equals(20));
     });
 
     test('PlanDetail.fromJson — transición de dieta null cuando no aplica', () {
@@ -225,19 +227,21 @@ void main() {
       expect(plan.transicionDieta, isNull);
     });
 
-    test('PlanDetail.fromJson — transición de dieta presente cuando aplica', () {
+    test('PlanDetail.fromJson — transición de dieta presente con fases', () {
       final json = _buildPlanJson()
         ..['transicion_dieta'] = {
-          'duracion_dias': 7,
-          'semana_1_pct_nuevo': 25,
-          'semana_2_pct_nuevo': 50,
-          'semana_3_pct_nuevo': 75,
-          'semana_4_pct_nuevo': 100,
-          'notas': null,
+          'duracion_dias': 10,
+          'fases': [
+            {'dias': '1-3', 'descripcion': '25% nuevo + 75% anterior'},
+            {'dias': '4-7', 'descripcion': '50% nuevo + 50% anterior'},
+          ],
+          'senales_de_alerta': ['Vómito persistente', 'Diarrea severa'],
         };
       final plan = PlanDetail.fromJson(json);
       expect(plan.transicionDieta, isNotNull);
-      expect(plan.transicionDieta!.semana1PctNuevo, equals(25));
+      expect(plan.transicionDieta!.duracionDias, equals(10));
+      expect(plan.transicionDieta!.fases.length, equals(2));
+      expect(plan.transicionDieta!.fases.first.dias, equals('1-3'));
     });
 
     test('PlanDetail.fromJson — disclaimer obligatorio presente (REGLA 8)', () {
@@ -318,25 +322,51 @@ Map<String, dynamic> _buildPlanJson() => {
       },
       'ingredientes': {
         'items': [
-          {'nombre': 'Pollo cocido', 'cantidad_gramos': 150.0, 'notas': null},
-          {'nombre': 'Arroz blanco', 'cantidad_gramos': 80.0, 'notas': 'bien cocido'},
-          {'nombre': 'Zanahoria', 'cantidad_gramos': 30.0, 'notas': null},
+          {'nombre': 'Pollo cocido', 'cantidad_g': 150.0, 'kcal': 180.0, 'proteina_g': 30.0, 'grasa_g': 4.0, 'fuente': 'animal', 'frecuencia': 'diario', 'notas': null},
+          {'nombre': 'Arroz blanco', 'cantidad_g': 80.0, 'kcal': 90.0, 'proteina_g': 2.0, 'grasa_g': 0.5, 'fuente': 'vegetal', 'frecuencia': 'diario', 'notas': 'bien cocido'},
+          {'nombre': 'Zanahoria', 'cantidad_g': 30.0, 'kcal': 12.0, 'proteina_g': 0.5, 'grasa_g': 0.1, 'fuente': 'vegetal', 'frecuencia': 'diario', 'notas': null},
         ],
       },
+      'objetivos_clinicos': [
+        'Cubrir el requerimiento energético de 534 kcal/día',
+        'Mantener masa muscular magra',
+      ],
+      'ingredientes_prohibidos': ['Cebolla', 'Ajo'],
       'porciones': {
         'comidas_por_dia': 2,
+        'g_por_comida': 75.0,
         'porcion_por_comida_gramos': 75.0,
-        'notas': null,
+        'total_g_dia': 150.0,
+        'distribucion_comidas': [
+          {'horario': 'mañana 7:00', 'porcentaje': 50.0, 'gramos': 75.0, 'proteina_g': 40.0, 'carbo_g': 25.0, 'vegetal_g': 10.0},
+          {'horario': 'tarde 17:00', 'porcentaje': 50.0, 'gramos': 75.0, 'proteina_g': 40.0, 'carbo_g': 25.0, 'vegetal_g': 10.0},
+        ],
       },
+      'suplementos': [],
       'instrucciones_preparacion': {
+        'metodo': 'cocción suave',
         'pasos': [
           'Cocinar el pollo sin sal ni condimentos.',
           'Mezclar con arroz y zanahoria.',
           'Dejar enfriar antes de servir.',
         ],
-        'tiempo_estimado_minutos': 20,
-        'notas': null,
+        'tiempo_preparacion_minutos': 20,
+        'almacenamiento': 'Refrigerar hasta 3 días en recipiente hermético.',
+        'advertencias': [],
+        'instrucciones_por_grupo': {
+          'proteinas': ['Cocinar a 75°C internos. Sin sal ni especias.'],
+          'carbohidratos': ['Cocinar bien hasta que estén blandos.'],
+          'vegetales': ['Cocinar al vapor 5-8 minutos.'],
+        },
+        'adiciones_permitidas': ['Cúrcuma: antiinflamatoria — 1/4 cucharadita'],
       },
+      'snacks_saludables': [
+        {'nombre': 'Zanahoria cocida', 'descripcion': 'Trozo pequeño de zanahoria cocida sin sal', 'cantidad_g': 20.0, 'frecuencia': '2-3 veces/semana'},
+      ],
+      'protocolo_digestivo': [
+        'Si hay vómito: ayuno de 12h, luego reintroducir gradualmente.',
+        'Si hay diarrea: añadir calabaza cocida como probiótico natural.',
+      ],
       'transicion_dieta': null,
       'approved_by_vet_id': null,
       'review_date': null,

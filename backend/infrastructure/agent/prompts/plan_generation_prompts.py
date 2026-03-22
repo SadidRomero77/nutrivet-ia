@@ -238,6 +238,57 @@ Reglas de la modalidad mixta:
 # BLOQUE 5 — Guardarraíles anti-alucinación
 # ═══════════════════════════════════════════════════════════════════════════════
 
+_BLOQUE_PLAN_CLINICO = """
+ESTRUCTURA CLÍNICA DEL PLAN — INSTRUCCIONES DE CONTENIDO:
+
+OBJETIVOS CLÍNICOS (objetivos_clinicos):
+- Genera 3-4 objetivos PERSONALIZADOS para este paciente específico
+- NO uses objetivos genéricos — menciona la condición, especie, peso, fase de BCS
+- Ejemplos de formato:
+  "Cubrir el requerimiento energético diario de {DER} kcal con fuentes proteicas de alta digestibilidad"
+  "Controlar el aporte de fósforo para preservar la función renal"
+  "Alcanzar peso ideal de forma gradual manteniendo masa muscular magra"
+
+INGREDIENTES PROHIBIDOS (ingredientes_prohibidos):
+- Lista ESPECÍFICA para este paciente: tóxicos por especie + alergias registradas + prohibidos por condición
+- Incluye los más relevantes (6-10 items), no solo los obvios
+- Ejemplo: "Cebolla y ajo (tóxicos)", "Fósforo alto: vísceras de res" (si renal), "Grasa saturada alta: tocino" (si pancreático)
+
+CRONOGRAMA DIARIO (porciones.distribucion_comidas):
+- Especifica gramos de proteína, carbo y vegetal en CADA comida
+- proteina_g + carbo_g + vegetal_g deben sumar aproximadamente gramos totales de esa comida
+- El horario debe ser práctico para un propietario en LATAM
+
+INSTRUCCIONES POR GRUPO (instrucciones_preparacion.instrucciones_por_grupo):
+- "proteinas": cómo cocinar (temperatura, tiempo, método) — sin sal, sin condimentos prohibidos
+- "carbohidratos": cómo preparar (cocción, cantidad de agua, textura)
+- "vegetales": cómo cocinar o si van crudos — temperatura, beneficio de ese vegetal
+- Instrucciones simples que un propietario sin conocimientos culinarios pueda seguir
+
+ADICIONES PERMITIDAS (instrucciones_preparacion.adiciones_permitidas):
+- Especias y condimentos SEGUROS para la especie y condiciones
+- Perros: cúrcuma (antiinflamatoria), orégano seco, albahaca, canela poca cantidad
+- Gatos: muy pocas especias permitidas — solo aceite de salmón, cúrcuma mínima
+- Formato: "<especia>: <beneficio> — <cantidad máxima sugerida>"
+
+SNACKS SALUDABLES (snacks_saludables):
+- 2-3 opciones aprobadas para este paciente
+- Deben cumplir las mismas restricciones del plan (condiciones, alergias)
+- Incluye receta simple + cantidad máxima por ocasión
+- Ejemplo: zanahoria cocida, trozo de pechuga sin condimentar, clara de huevo cocida
+
+PROTOCOLO DIGESTIVO (protocolo_digestivo):
+- Mínimo 3 instrucciones: qué hacer si hay vómito, diarrea, inapetencia
+- Siempre incluir: "Si el problema persiste más de 24-48 horas, consultar al veterinario"
+- Instrucciones prácticas, no diagnósticos médicos
+
+SUPLEMENTOS:
+- Solo prescribir si hay deficiencia documentada o condición médica que lo requiera
+- Para dietas naturales: siempre evaluar calcio (si cocido), taurina (gatos), omega-3
+- Especificar marca genérica disponible en LATAM cuando sea posible
+""".strip()
+
+
 _BLOQUE_ANTI_ALUCINACION = """
 REGLAS ANTI-ALUCINACIÓN — NUNCA VIOLES ESTAS REGLAS:
 
@@ -386,6 +437,8 @@ def build_plan_system_prompt(
         parts.append("\n\n" + "=" * 70)
         parts.append("\n" + condition_block)
 
+    parts.append("\n\n" + "=" * 70)
+    parts.append("\n" + _BLOQUE_PLAN_CLINICO)
     parts.append("\n\n" + "=" * 70)
     parts.append("\n" + _BLOQUE_ANTI_ALUCINACION)
     parts.append("\n\n" + "=" * 70)

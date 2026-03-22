@@ -12,7 +12,7 @@ import '../../../core/api/api_client.dart';
 part 'plan_repository.g.dart';
 
 // ---------------------------------------------------------------------------
-// Modelos — reflejan exactamente PlanResponse / PlanSummaryResponse del backend
+// Modelos — reflejan exactamente PlanResponse del backend
 // ---------------------------------------------------------------------------
 
 class PerfilNutricional {
@@ -22,7 +22,9 @@ class PerfilNutricional {
     required this.weightPhase,
     this.proteinPct,
     this.fatPct,
-    this.carbsPct,
+    this.racionTotalGDia,
+    this.relacionCaP,
+    this.omega3MgDia,
   });
 
   factory PerfilNutricional.fromJson(Map<String, dynamic> json) =>
@@ -32,7 +34,9 @@ class PerfilNutricional {
         weightPhase: json['weight_phase'] as String,
         proteinPct: (json['protein_pct'] as num?)?.toDouble(),
         fatPct: (json['fat_pct'] as num?)?.toDouble(),
-        carbsPct: (json['carbs_pct'] as num?)?.toDouble(),
+        racionTotalGDia: (json['racion_total_g_dia'] as num?)?.toDouble(),
+        relacionCaP: (json['relacion_ca_p'] as num?)?.toDouble(),
+        omega3MgDia: (json['omega3_mg_dia'] as num?)?.toDouble(),
       );
 
   final double rerKcal;
@@ -40,95 +44,240 @@ class PerfilNutricional {
   final String weightPhase;
   final double? proteinPct;
   final double? fatPct;
-  final double? carbsPct;
+  final double? racionTotalGDia;
+  final double? relacionCaP;
+  final double? omega3MgDia;
 }
 
 class IngredientItem {
   IngredientItem({
     required this.nombre,
-    this.cantidadGramos,
+    this.cantidadG,
+    this.kcal,
+    this.proteinaG,
+    this.grasaG,
+    this.fuente,
+    this.frecuencia,
     this.notas,
   });
 
   factory IngredientItem.fromJson(Map<String, dynamic> json) => IngredientItem(
         nombre: json['nombre'] as String,
-        cantidadGramos: (json['cantidad_gramos'] as num?)?.toDouble(),
+        cantidadG: (json['cantidad_g'] as num?)?.toDouble(),
+        kcal: (json['kcal'] as num?)?.toDouble(),
+        proteinaG: (json['proteina_g'] as num?)?.toDouble(),
+        grasaG: (json['grasa_g'] as num?)?.toDouble(),
+        fuente: json['fuente'] as String?,
+        frecuencia: json['frecuencia'] as String?,
         notas: json['notas'] as String?,
       );
 
   final String nombre;
-  final double? cantidadGramos;
+  final double? cantidadG;
+  final double? kcal;
+  final double? proteinaG;
+  final double? grasaG;
+  final String? fuente;
+  final String? frecuencia;
   final String? notas;
+}
+
+class ComidaDistribucion {
+  ComidaDistribucion({
+    required this.horario,
+    this.porcentaje,
+    this.gramos,
+    this.proteinaG,
+    this.carboG,
+    this.vegeatalG,
+  });
+
+  factory ComidaDistribucion.fromJson(Map<String, dynamic> json) =>
+      ComidaDistribucion(
+        horario: json['horario'] as String,
+        porcentaje: (json['porcentaje'] as num?)?.toDouble(),
+        gramos: (json['gramos'] as num?)?.toDouble(),
+        proteinaG: (json['proteina_g'] as num?)?.toDouble(),
+        carboG: (json['carbo_g'] as num?)?.toDouble(),
+        vegeatalG: (json['vegetal_g'] as num?)?.toDouble(),
+      );
+
+  final String horario;
+  final double? porcentaje;
+  final double? gramos;
+  final double? proteinaG;
+  final double? carboG;
+  final double? vegeatalG;
 }
 
 class Porciones {
   Porciones({
     required this.comidasPorDia,
-    this.porcionPorComidaGramos,
-    this.notas,
+    this.totalGDia,
+    this.gPorComida,
+    this.distribucionComidas = const [],
   });
 
   factory Porciones.fromJson(Map<String, dynamic> json) => Porciones(
-        comidasPorDia: (json['comidas_por_dia'] as num).toInt(),
-        porcionPorComidaGramos:
-            (json['porcion_por_comida_gramos'] as num?)?.toDouble(),
-        notas: json['notas'] as String?,
+        comidasPorDia: (json['comidas_por_dia'] as num? ?? 2).toInt(),
+        totalGDia: (json['total_g_dia'] as num?)?.toDouble(),
+        gPorComida: (json['g_por_comida'] as num? ??
+                json['porcion_por_comida_gramos'] as num?)
+            ?.toDouble(),
+        distribucionComidas: ((json['distribucion_comidas'] as List?) ?? [])
+            .map((e) => ComidaDistribucion.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 
   final int comidasPorDia;
-  final double? porcionPorComidaGramos;
-  final String? notas;
+  final double? totalGDia;
+  final double? gPorComida;
+  final List<ComidaDistribucion> distribucionComidas;
+}
+
+class SupplementoItem {
+  SupplementoItem({
+    required this.nombre,
+    required this.dosis,
+    required this.frecuencia,
+    required this.forma,
+    required this.justificacion,
+  });
+
+  factory SupplementoItem.fromJson(Map<String, dynamic> json) =>
+      SupplementoItem(
+        nombre: json['nombre'] as String,
+        dosis: json['dosis'] as String,
+        frecuencia: json['frecuencia'] as String,
+        forma: json['forma'] as String,
+        justificacion: json['justificacion'] as String,
+      );
+
+  final String nombre;
+  final String dosis;
+  final String frecuencia;
+  final String forma;
+  final String justificacion;
+}
+
+class InstruccionesPorGrupo {
+  InstruccionesPorGrupo({
+    this.proteinas = const [],
+    this.carbohidratos = const [],
+    this.vegetales = const [],
+  });
+
+  factory InstruccionesPorGrupo.fromJson(Map<String, dynamic> json) =>
+      InstruccionesPorGrupo(
+        proteinas: List<String>.from(json['proteinas'] as List? ?? []),
+        carbohidratos:
+            List<String>.from(json['carbohidratos'] as List? ?? []),
+        vegetales: List<String>.from(json['vegetales'] as List? ?? []),
+      );
+
+  final List<String> proteinas;
+  final List<String> carbohidratos;
+  final List<String> vegetales;
+
+  bool get isEmpty =>
+      proteinas.isEmpty && carbohidratos.isEmpty && vegetales.isEmpty;
 }
 
 class InstruccionesPreparacion {
   InstruccionesPreparacion({
+    this.metodo,
     required this.pasos,
-    this.tiempoEstimadoMinutos,
-    this.notas,
+    this.tiempoPreparacionMinutos,
+    this.almacenamiento,
+    this.advertencias = const [],
+    this.instruccionesPorGrupo,
+    this.adicionesPermitidas = const [],
   });
 
   factory InstruccionesPreparacion.fromJson(Map<String, dynamic> json) =>
       InstruccionesPreparacion(
+        metodo: json['metodo'] as String?,
         pasos: List<String>.from(json['pasos'] as List? ?? []),
-        tiempoEstimadoMinutos:
-            (json['tiempo_estimado_minutos'] as num?)?.toInt(),
-        notas: json['notas'] as String?,
+        tiempoPreparacionMinutos: (json['tiempo_preparacion_minutos'] as num? ??
+                json['tiempo_estimado_minutos'] as num?)
+            ?.toInt(),
+        almacenamiento: json['almacenamiento'] as String?,
+        advertencias:
+            List<String>.from(json['advertencias'] as List? ?? []),
+        instruccionesPorGrupo:
+            json['instrucciones_por_grupo'] is Map<String, dynamic>
+                ? InstruccionesPorGrupo.fromJson(
+                    json['instrucciones_por_grupo'] as Map<String, dynamic>)
+                : null,
+        adicionesPermitidas:
+            List<String>.from(json['adiciones_permitidas'] as List? ?? []),
       );
 
+  final String? metodo;
   final List<String> pasos;
-  final int? tiempoEstimadoMinutos;
-  final String? notas;
+  final int? tiempoPreparacionMinutos;
+  final String? almacenamiento;
+  final List<String> advertencias;
+  final InstruccionesPorGrupo? instruccionesPorGrupo;
+  final List<String> adicionesPermitidas;
+}
+
+class SnackSaludable {
+  SnackSaludable({
+    required this.nombre,
+    required this.descripcion,
+    required this.cantidadG,
+    required this.frecuencia,
+  });
+
+  factory SnackSaludable.fromJson(Map<String, dynamic> json) => SnackSaludable(
+        nombre: json['nombre'] as String,
+        descripcion: json['descripcion'] as String,
+        cantidadG: (json['cantidad_g'] as num).toDouble(),
+        frecuencia: json['frecuencia'] as String,
+      );
+
+  final String nombre;
+  final String descripcion;
+  final double cantidadG;
+  final String frecuencia;
+}
+
+class FaseTransicion {
+  FaseTransicion({required this.dias, required this.descripcion});
+
+  factory FaseTransicion.fromJson(Map<String, dynamic> json) => FaseTransicion(
+        dias: json['dias'] as String,
+        descripcion: json['descripcion'] as String,
+      );
+
+  final String dias;
+  final String descripcion;
 }
 
 class TransicionDieta {
   TransicionDieta({
     required this.duracionDias,
-    required this.semana1PctNuevo,
-    required this.semana2PctNuevo,
-    required this.semana3PctNuevo,
-    required this.semana4PctNuevo,
-    this.notas,
+    this.fases = const [],
+    this.senalesDeAlerta = const [],
   });
 
   factory TransicionDieta.fromJson(Map<String, dynamic> json) =>
       TransicionDieta(
-        duracionDias: (json['duracion_dias'] as num).toInt(),
-        semana1PctNuevo: (json['semana_1_pct_nuevo'] as num).toInt(),
-        semana2PctNuevo: (json['semana_2_pct_nuevo'] as num).toInt(),
-        semana3PctNuevo: (json['semana_3_pct_nuevo'] as num).toInt(),
-        semana4PctNuevo: (json['semana_4_pct_nuevo'] as num).toInt(),
-        notas: json['notas'] as String?,
+        duracionDias: (json['duracion_dias'] as num? ?? 7).toInt(),
+        fases: ((json['fases'] as List?) ?? [])
+            .map((e) => FaseTransicion.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        senalesDeAlerta:
+            List<String>.from(json['senales_de_alerta'] as List? ?? []),
       );
 
   final int duracionDias;
-  final int semana1PctNuevo;
-  final int semana2PctNuevo;
-  final int semana3PctNuevo;
-  final int semana4PctNuevo;
-  final String? notas;
+  final List<FaseTransicion> fases;
+  final List<String> senalesDeAlerta;
 }
 
-/// Modelo detallado de plan — refleja PlanResponse del backend (ADR-020).
+/// Modelo detallado de plan — estructura clínica completa (ADR-020 + Lady Carolina ref).
 class PlanDetail {
   PlanDetail({
     required this.planId,
@@ -141,6 +290,13 @@ class PlanDetail {
     required this.porciones,
     required this.instruccionesPreparacion,
     required this.disclaimer,
+    this.objetivosClinicos = const [],
+    this.ingredientesProhibidos = const [],
+    this.suplementos = const [],
+    this.snacksSaludables = const [],
+    this.protocloDigestivo = const [],
+    this.notasClincias = const [],
+    this.alertasPropietario = const [],
     this.transicionDieta,
     this.vetComment,
     this.reviewDate,
@@ -155,17 +311,37 @@ class PlanDetail {
         perfilNutricional: PerfilNutricional.fromJson(
           json['perfil_nutricional'] as Map<String, dynamic>,
         ),
-        ingredientes: ((json['ingredientes'] as Map<String, dynamic>?)?['items']
-                    as List? ??
-                [])
-            .map((e) => IngredientItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        objetivosClinicos: List<String>.from(
+            json['objetivos_clinicos'] as List? ?? []),
+        ingredientesProhibidos: List<String>.from(
+            json['ingredientes_prohibidos'] as List? ?? []),
+        ingredientes:
+            ((json['ingredientes'] as Map<String, dynamic>?)?['items']
+                        as List? ??
+                    [])
+                .map((e) =>
+                    IngredientItem.fromJson(e as Map<String, dynamic>))
+                .toList(),
         porciones: Porciones.fromJson(
           json['porciones'] as Map<String, dynamic>? ?? {},
         ),
+        suplementos: ((json['suplementos'] as List?) ?? [])
+            .map((e) =>
+                SupplementoItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
         instruccionesPreparacion: InstruccionesPreparacion.fromJson(
           json['instrucciones_preparacion'] as Map<String, dynamic>? ?? {},
         ),
+        snacksSaludables: ((json['snacks_saludables'] as List?) ?? [])
+            .map((e) =>
+                SnackSaludable.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        protocloDigestivo: List<String>.from(
+            json['protocolo_digestivo'] as List? ?? []),
+        notasClincias: List<String>.from(
+            json['notas_clinicas'] as List? ?? []),
+        alertasPropietario: List<String>.from(
+            json['alertas_propietario'] as List? ?? []),
         transicionDieta: json['transicion_dieta'] != null
             ? TransicionDieta.fromJson(
                 json['transicion_dieta'] as Map<String, dynamic>,
@@ -173,7 +349,7 @@ class PlanDetail {
             : null,
         vetComment: json['vet_comment'] as String?,
         reviewDate: json['review_date'] != null
-            ? DateTime.parse(json['review_date'] as String)
+            ? DateTime.tryParse(json['review_date'] as String)
             : null,
         disclaimer: json['disclaimer'] as String? ??
             'NutriVet.IA es asesoría nutricional digital — '
@@ -186,9 +362,16 @@ class PlanDetail {
   final String modality;
   final String llmModelUsed;
   final PerfilNutricional perfilNutricional;
+  final List<String> objetivosClinicos;
+  final List<String> ingredientesProhibidos;
   final List<IngredientItem> ingredientes;
   final Porciones porciones;
+  final List<SupplementoItem> suplementos;
   final InstruccionesPreparacion instruccionesPreparacion;
+  final List<SnackSaludable> snacksSaludables;
+  final List<String> protocloDigestivo;
+  final List<String> notasClincias;
+  final List<String> alertasPropietario;
   final TransicionDieta? transicionDieta;
   final String? vetComment;
   final DateTime? reviewDate;
@@ -337,6 +520,22 @@ class PlanRepository {
       }
       rethrow;
     }
+  }
+
+  /// Solicita sustitución de un ingrediente via IA.
+  Future<Map<String, dynamic>> requestSubstitute({
+    required String planId,
+    required String originalIngredient,
+    required String substituteIngredient,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/v1/plans/$planId/substitutes',
+      data: {
+        'original_ingredient': originalIngredient,
+        'substitute_ingredient': substituteIngredient,
+      },
+    );
+    return response.data!;
   }
 
   /// Exporta el plan a PDF y comparte la URL pre-signed.

@@ -43,7 +43,11 @@ from backend.presentation.schemas.pet_schemas import PetResponse
 from backend.infrastructure.db.session import get_db_session
 from backend.presentation.middleware.auth_middleware import get_current_user, require_role
 from backend.presentation.schemas.plan_schemas import (
+    ComidaDistribucion,
+    FaseTransicion,
+    IngredientItem,
     IngredientsSection,
+    InstruccionesPorGrupo,
     NutritionalProfileSection,
     PlanApproveRequest,
     PlanGenerateRequest,
@@ -53,8 +57,10 @@ from backend.presentation.schemas.plan_schemas import (
     PlanSummaryResponse,
     PortionsSection,
     PreparationSection,
+    SnackSaludable,
     SubstituteRequest,
     SubstituteResponse,
+    SupplementItem,
     TransitionSection,
 )
 
@@ -119,50 +125,128 @@ def _sub_use_case(session: AsyncSession) -> IngredientSubstitutionUseCase:
 # ---------------------------------------------------------------------------
 
 def _plan_to_response(plan: Any) -> PlanResponse:
-    """Convierte NutritionPlan → PlanResponse con 5 secciones."""
+    """Convierte NutritionPlan → PlanResponse con estructura clínica completa."""
     content = plan.content or {}
 
     # Sección 1: Perfil nutricional
+    pn_raw = content.get("perfil_nutricional", {}) or {}
     perfil = NutritionalProfileSection(
         rer_kcal=plan.rer_kcal,
         der_kcal=plan.der_kcal,
         weight_phase=plan.weight_phase.value if hasattr(plan.weight_phase, "value") else str(plan.weight_phase),
-        protein_pct=content.get("perfil_nutricional", {}).get("protein_pct"),
-        fat_pct=content.get("perfil_nutricional", {}).get("fat_pct"),
-        carbs_pct=content.get("perfil_nutricional", {}).get("carbs_pct"),
+        protein_pct=pn_raw.get("proteina_pct_ms"),
+        fat_pct=pn_raw.get("grasa_pct_ms"),
+        racion_total_g_dia=pn_raw.get("racion_total_g_dia"),
+        relacion_ca_p=pn_raw.get("relacion_ca_p"),
+        omega3_mg_dia=pn_raw.get("omega3_mg_dia"),
     )
 
-    # Sección 2: Ingredientes
+    # Sección 2: Ingredientes — campo correcto del LLM es `cantidad_g`
     ingredientes_raw = content.get("ingredientes", [])
     if isinstance(ingredientes_raw, list):
-        from backend.presentation.schemas.plan_schemas import IngredientItem
         items = [
             IngredientItem(
-                nombre=i["nombre"] if isinstance(i, dict) else str(i),
-                cantidad_gramos=i.get("cantidad_gramos") if isinstance(i, dict) else None,
+                nombre=i.get("nombre", "") if isinstance(i, dict) else str(i),
+                cantidad_g=i.get("cantidad_g") if isinstance(i, dict) else None,
+                kcal=i.get("kcal") if isinstance(i, dict) else None,
+                proteina_g=i.get("proteina_g") if isinstance(i, dict) else None,
+                grasa_g=i.get("grasa_g") if isinstance(i, dict) else None,
+                fuente=i.get("fuente") if isinstance(i, dict) else None,
+                frecuencia=i.get("frecuencia") if isinstance(i, dict) else None,
+                notas=i.get("notas") if isinstance(i, dict) else None,
             )
             for i in ingredientes_raw
+            if isinstance(i, dict) and i.get("nombre")
         ]
     else:
         items = []
 
-    # Sección 3: Porciones
-    porciones_raw = content.get("porciones", {})
+    # Sección 3: Porciones con cronograma diario
+    porciones_raw = content.get("porciones", {}) or {}
+    distribucion_raw = porciones_raw.get("distribucion_comidas", []) if isinstance(porciones_raw, dict) else []
+    distribucion = [
+        ComidaDistribucion(
+            horario=c.get("horario", ""),
+            porcentaje=c.get("porcentaje"),
+            gramos=c.get("gramos"),
+            proteina_g=c.get("proteina_g"),
+            carbo_g=c.get("carbo_g"),
+            vegetal_g=c.get("vegetal_g"),
+        )
+        for c in distribucion_raw
+        if isinstance(c, dict)
+    ]
+    g_por_comida = porciones_raw.get("g_por_comida") if isinstance(porciones_raw, dict) else None
     porciones = PortionsSection(
-        comidas_por_dia=porciones_raw.get("comidas_por_dia", 2) if isinstance(porciones_raw, dict) else 2,
-        porcion_por_comida_gramos=porciones_raw.get("porcion_por_comida_gramos") if isinstance(porciones_raw, dict) else None,
+        comidas_por_dia=porciones_raw.get("numero_comidas", 2) if isinstance(porciones_raw, dict) else 2,
+        total_g_dia=porciones_raw.get("total_g_dia") if isinstance(porciones_raw, dict) else None,
+        g_por_comida=g_por_comida,
+        porcion_por_comida_gramos=g_por_comida,
+        distribucion_comidas=distribucion,
     )
 
-    # Sección 4: Instrucciones
-    instr_raw = content.get("instrucciones_preparacion", {})
+    # Sección 4: Suplementos
+    supl_raw = content.get("suplementos", []) or []
+    suplementos = [
+        SupplementItem(
+            nombre=s.get("nombre", ""),
+            dosis=s.get("dosis", ""),
+            frecuencia=s.get("frecuencia", ""),
+            forma=s.get("forma", ""),
+            justificacion=s.get("justificacion", ""),
+        )
+        for s in supl_raw
+        if isinstance(s, dict) and s.get("nombre")
+    ]
+
+    # Sección 5: Instrucciones de preparación completas
+    instr_raw = content.get("instrucciones_preparacion", {}) or {}
+    ipg_raw = instr_raw.get("instrucciones_por_grupo", {}) or {} if isinstance(instr_raw, dict) else {}
     instrucciones = PreparationSection(
+        metodo=instr_raw.get("metodo") if isinstance(instr_raw, dict) else None,
         pasos=instr_raw.get("pasos", []) if isinstance(instr_raw, dict) else [],
-        tiempo_estimado_minutos=instr_raw.get("tiempo_estimado_minutos") if isinstance(instr_raw, dict) else None,
+        tiempo_preparacion_minutos=instr_raw.get("tiempo_preparacion_minutos") if isinstance(instr_raw, dict) else None,
+        tiempo_estimado_minutos=instr_raw.get("tiempo_preparacion_minutos") if isinstance(instr_raw, dict) else None,
+        almacenamiento=instr_raw.get("almacenamiento") if isinstance(instr_raw, dict) else None,
+        advertencias=instr_raw.get("advertencias", []) if isinstance(instr_raw, dict) else [],
+        instrucciones_por_grupo=InstruccionesPorGrupo(
+            proteinas=ipg_raw.get("proteinas", []) if isinstance(ipg_raw, dict) else [],
+            carbohidratos=ipg_raw.get("carbohidratos", []) if isinstance(ipg_raw, dict) else [],
+            vegetales=ipg_raw.get("vegetales", []) if isinstance(ipg_raw, dict) else [],
+        ),
+        adiciones_permitidas=instr_raw.get("adiciones_permitidas", []) if isinstance(instr_raw, dict) else [],
     )
 
-    # Sección 5: Transición (condicional)
-    trans_raw = content.get("transicion_dieta")
-    transicion = TransitionSection(**trans_raw) if isinstance(trans_raw, dict) else None
+    # Sección 6: Snacks saludables
+    snacks_raw = content.get("snacks_saludables", []) or []
+    snacks = [
+        SnackSaludable(
+            nombre=s.get("nombre", ""),
+            descripcion=s.get("descripcion", ""),
+            cantidad_g=s.get("cantidad_g", 20),
+            frecuencia=s.get("frecuencia", "ocasional"),
+        )
+        for s in snacks_raw
+        if isinstance(s, dict) and s.get("nombre")
+    ]
+
+    # Sección 7: Transición (condicional)
+    trans_raw = content.get("transicion_dieta") or {}
+    if isinstance(trans_raw, dict) and trans_raw:
+        fases_raw = trans_raw.get("fases", []) or []
+        fases = [
+            FaseTransicion(dias=f.get("dias", ""), descripcion=f.get("descripcion", ""))
+            for f in fases_raw
+            if isinstance(f, dict)
+        ]
+        transicion: TransitionSection | None = TransitionSection(
+            requiere_transicion=trans_raw.get("requiere_transicion", True),
+            duracion_dias=trans_raw.get("duracion_dias", 7),
+            fases=fases,
+            senales_de_alerta=trans_raw.get("senales_de_alerta", []),
+        )
+    else:
+        transicion = None
 
     return PlanResponse(
         plan_id=plan.plan_id,
@@ -173,10 +257,17 @@ def _plan_to_response(plan: Any) -> PlanResponse:
         modality=plan.modality.value if hasattr(plan.modality, "value") else str(plan.modality),
         llm_model_used=plan.llm_model_used,
         perfil_nutricional=perfil,
+        objetivos_clinicos=content.get("objetivos_clinicos", []) or [],
+        ingredientes_prohibidos=content.get("ingredientes_prohibidos", []) or [],
         ingredientes=IngredientsSection(items=items),
         porciones=porciones,
+        suplementos=suplementos,
         instrucciones_preparacion=instrucciones,
+        snacks_saludables=snacks,
+        protocolo_digestivo=content.get("protocolo_digestivo", []) or [],
         transicion_dieta=transicion,
+        notas_clinicas=content.get("notas_clinicas", []) or [],
+        alertas_propietario=content.get("alertas_propietario", []) or [],
         approved_by_vet_id=plan.approved_by_vet_id,
         review_date=plan.review_date,
         vet_comment=plan.vet_comment,
