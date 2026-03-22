@@ -203,9 +203,9 @@ class _ReviewContentState extends ConsumerState<_ReviewContent> {
                             contentPadding: EdgeInsets.zero,
                             leading: const Icon(Icons.eco, size: 18),
                             title: Text(i.nombre),
-                            trailing: i.cantidadGramos != null
+                            trailing: i.cantidadG != null
                                 ? Text(
-                                    '${i.cantidadGramos!.toStringAsFixed(0)} g',
+                                    '${i.cantidadG!.toStringAsFixed(0)} g',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold),
                                   )
@@ -223,9 +223,9 @@ class _ReviewContentState extends ConsumerState<_ReviewContent> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Comidas por día: ${plan.porciones.comidasPorDia}'),
-                    if (plan.porciones.porcionPorComidaGramos != null)
+                    if (plan.porciones.gPorComida != null)
                       Text(
-                          'Por comida: ${plan.porciones.porcionPorComidaGramos!.toStringAsFixed(0)} g'),
+                          'Por comida: ${plan.porciones.gPorComida!.toStringAsFixed(0)} g'),
                   ],
                 ),
               ),
