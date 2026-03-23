@@ -26,7 +26,7 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class AnimalProtein:
-    """Perfil nutricional de proteína animal por 100g crudo."""
+    """Perfil nutricional de proteína animal por 100g crudo (salvo donde se indica)."""
     nombre: str
     aliases: list[str]
     kcal: float
@@ -37,8 +37,20 @@ class AnimalProtein:
     fosforo_mg: float
     zinc_mg: float
     hierro_mg: float
-    taurina_mg: Optional[float]       # None = no aplica o sin dato confiable
-    omega3_epa_dha_mg: Optional[float]  # EPA+DHA combinados
+    taurina_mg: Optional[float]           # None = no aplica o sin dato confiable
+    omega3_epa_dha_mg: Optional[float]    # EPA+DHA combinados (mg)
+    # ── Micronutrientes ampliados (A-02) ────────────────────────────────────
+    humedad_pct: float = 70.0             # % agua en peso fresco
+    estado: str = "crudo"                 # "crudo" | "cocido"
+    magnesio_mg: float = 0.0
+    potasio_mg: float = 0.0
+    cobre_mg: float = 0.0
+    vitamina_d3_ui: float = 0.0           # UI por 100g
+    vitamina_a_ui: float = 0.0            # UI por 100g
+    tiamina_b1_mg: float = 0.0            # mg B1 (destruida por tiaminasa)
+    yodo_mcg: float = 0.0                 # mcg yodo
+    selenio_mcg: float = 0.0              # mcg selenio
+    tiene_tiaminasa: bool = False         # CRÍTICO para gatos: fish raw → deficiencia B1 → convulsiones
     notas: str = ""
 
 
@@ -55,6 +67,10 @@ class PlantFood:
     calcio_mg: float
     fosforo_mg: float
     indice_glucemico: Optional[int]    # None = sin dato validado
+    # ── Micronutrientes ampliados (A-02) ────────────────────────────────────
+    magnesio_mg: float = 0.0
+    potasio_mg: float = 0.0
+    humedad_pct: float = 80.0          # % agua en peso fresco
     notas: str = ""
 
 
@@ -536,10 +552,12 @@ PROTEINAS_ANIMALES: list[AnimalProtein] = [
         hierro_mg=0.8,
         taurina_mg=100.0,
         omega3_epa_dha_mg=2260.0,
+        tiene_tiaminasa=True,
         notas=(
             "PERROS: NUNCA salmón crudo del Pacífico Norte (riesgo Neorickettsia helminthoeca — "
             "enfermedad del salmón, letal). En Colombia/LATAM el riesgo es menor pero cocinar es prudente. "
-            "GATOS: siempre cocido. Mejor fuente de EPA+DHA del mercado."
+            "GATOS: siempre cocido. Mejor fuente de EPA+DHA del mercado. "
+            "TIAMINASA ACTIVA en crudo — cocinar siempre para evitar déficit de vitamina B1."
         ),
     ),
 
@@ -556,10 +574,11 @@ PROTEINAS_ANIMALES: list[AnimalProtein] = [
         hierro_mg=0.6,
         taurina_mg=60.0,
         omega3_epa_dha_mg=115.0,
+        tiene_tiaminasa=True,
         notas=(
             "Disponibilidad muy alta en Colombia (crianza local). "
             "Perfil omega-3 bajo comparado con salmón. Magra y de bajo costo. "
-            "Siempre cocinar — peces de agua dulce pueden tener parásitos."
+            "TIAMINASA ACTIVA en crudo — siempre cocinar. Peces de agua dulce: riesgo de parásitos."
         ),
     ),
 
@@ -576,9 +595,10 @@ PROTEINAS_ANIMALES: list[AnimalProtein] = [
         hierro_mg=0.7,
         taurina_mg=90.0,
         omega3_epa_dha_mg=900.0,
+        tiene_tiaminasa=True,
         notas=(
-            "Disponible en Colombia (Nariño, Boyacá). "
-            "Mayor omega-3 que tilapia. Siempre cocinar."
+            "Disponible en Colombia (Nariño, Boyacá). Mayor omega-3 que tilapia. "
+            "TIAMINASA ACTIVA en crudo — siempre cocinar. Peces de agua dulce: riesgo de parásitos."
         ),
     ),
 

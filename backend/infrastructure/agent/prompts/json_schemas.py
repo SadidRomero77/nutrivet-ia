@@ -63,6 +63,24 @@ class PerfilNutricionalSchema(BaseModel):
     relacion_ca_p: Optional[float] = Field(
         default=None, description="Ratio Ca:P (meta: 1.0-2.0)"
     )
+    # ── Campos de composición corporal (A-07) ────────────────────────────────
+    peso_actual_kg: Optional[float] = Field(
+        default=None, gt=0, description="Peso real del paciente en kg"
+    )
+    peso_ideal_estimado_kg: Optional[float] = Field(
+        default=None, gt=0, description="Peso ideal estimado según BCS y especie"
+    )
+    bcs_actual: Optional[int] = Field(
+        default=None, ge=1, le=9, description="Body Condition Score actual (1-9)"
+    )
+    fase: Optional[str] = Field(
+        default=None,
+        description="Fase del plan: 'reduccion' (BCS≥7) | 'mantenimiento' (BCS 4-6) | 'aumento' (BCS≤3)",
+    )
+    meta_peso: Optional[str] = Field(
+        default=None,
+        description="Descripción de la meta de peso (e.g. 'reducir 1.5 kg en 3 meses')",
+    )
 
     @model_validator(mode="after")
     def validar_calorias_consistentes(self) -> "PerfilNutricionalSchema":
@@ -157,7 +175,10 @@ class TransicionSchema(BaseModel):
         default=True,
         description="True excepto cuando es continuación de dieta similar",
     )
-    duracion_dias: int = Field(default=10, ge=5, le=21)
+    duracion_dias: int = Field(
+        default=10, ge=5, le=42,
+        description="Duración en días (5-21 estándar; hasta 42 para megaesofago)",
+    )
     fases: list[FaseTransicion] = Field(default_factory=list)
     senales_de_alerta: list[str] = Field(
         default_factory=list,
@@ -264,7 +285,12 @@ NO incluyas markdown (```json), NO texto antes o después del JSON.
     "omega3_mg_dia": <float — miligramos de EPA+DHA>,
     "racion_total_g_dia": <float — total gramos de alimento/día>,
     "kcal_verificadas": <float — suma de kcal de todos los ingredientes>,
-    "relacion_ca_p": <float — ratio Calcio:Fósforo, debe estar entre 1.0 y 2.0>
+    "relacion_ca_p": <float — ratio Calcio:Fósforo, debe estar entre 1.0 y 2.0>,
+    "peso_actual_kg": <float — peso real del paciente, provisto en el perfil>,
+    "peso_ideal_estimado_kg": <float — peso ideal estimado según BCS y especie>,
+    "bcs_actual": <int — BCS actual 1-9, provisto en el perfil>,
+    "fase": "<reduccion|mantenimiento|aumento — determinado por BCS>",
+    "meta_peso": "<descripción de la meta, e.g. 'mantener 10 kg' o 'reducir 1.5 kg en 3 meses'>"
   },
   "objetivos_clinicos": [
     "<objetivo 1 — personalizado para este paciente específico>",

@@ -10,12 +10,31 @@ from typing import Any
 
 from backend.application.interfaces.pet_repository import IPetRepository
 from backend.application.interfaces.plan_repository import IPlanRepository
+from backend.domain.safety.breed_restriction_engine import (
+    get_breed_restrictions,
+    has_breed_restrictions,
+)
 from backend.infrastructure.agent.state import NutriVetState
 
 
 def _pet_to_dict(pet: Any) -> dict[str, Any]:
     """Serializa PetProfile a dict (sin PII — solo campos técnicos)."""
-    return {
+    breed_id: str | None = getattr(pet, "breed_id", None)
+
+    # Restricciones preventivas por raza (A-08) — solo si hay raza registrada
+    breed_restrictions: dict[str, Any] = {}
+    if breed_id and has_breed_restrictions(breed_id):
+        r = get_breed_restrictions(breed_id)
+        if r is not None:
+            breed_restrictions = {
+                "prohibited_preventive": sorted(r.prohibited_preventive),
+                "limited_preventive": sorted(r.limited_preventive),
+                "recommended_preventive": sorted(r.recommended_preventive),
+                "special_preventive": sorted(r.special_preventive),
+                "alert": r.alert,
+            }
+
+    result: dict[str, Any] = {
         "pet_id": str(pet.pet_id),
         "species": pet.species.value,
         "weight_kg": pet.weight_kg,
@@ -26,7 +45,11 @@ def _pet_to_dict(pet: Any) -> dict[str, Any]:
         "medical_conditions": [c.value for c in pet.medical_conditions],
         "allergies": list(pet.allergies) if pet.allergies else [],
         "owner_id": str(pet.owner_id),
+        "breed_id": breed_id,
     }
+    if breed_restrictions:
+        result["breed_preventive_restrictions"] = breed_restrictions
+    return result
 
 
 def _plan_to_dict(plan: Any) -> dict[str, Any]:
