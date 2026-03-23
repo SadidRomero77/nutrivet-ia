@@ -19,6 +19,14 @@ from backend.domain.nutrition.nrc_factors import (
     ESTADO_REPRODUCTIVO_VALIDO,
     FACTOR_EDAD_GATO,
     FACTOR_EDAD_PERRO,
+    FACTOR_GESTACION_GATO,
+    FACTOR_GESTACION_PERRO,
+    FACTOR_LACTANCIA_BASE_GATO,
+    FACTOR_LACTANCIA_BASE_PERRO,
+    FACTOR_LACTANCIA_MAX_CACHORROS,
+    FACTOR_LACTANCIA_MAX_GATITOS,
+    FACTOR_LACTANCIA_POR_CACHORRO,
+    FACTOR_LACTANCIA_POR_GATITO,
     FACTOR_VIDA_GATO,
     FACTOR_VIDA_PERRO,
 )
@@ -58,19 +66,27 @@ class NRCCalculator:
         activity_level: str,
         species: str,
         bcs: int,
+        num_offspring: int = 0,
+        gestation_week: int = 0,
     ) -> float:
         """
         Calcula el Requerimiento Energético Diario (DER).
 
-        DER = RER × factor_vida × factor_edad × bcs_modifier
+        Fórmula base: DER = RER × factor_vida × factor_edad × bcs_modifier
+        Estados especiales:
+          gestante:  DER = RER × factor_gestacion(semana) × bcs_modifier
+          lactante:  DER = RER × (base + coef × n_crías)  — sin bcs_modifier
 
         Args:
             rer: RER calculado previamente (kcal/día).
             age_months: Edad en meses.
-            reproductive_status: "esterilizado" | "no_esterilizado".
+            reproductive_status: "esterilizado" | "no_esterilizado" |
+                                  "gestante" | "lactante".
             activity_level: Nivel de actividad válido para la especie.
             species: "perro" | "gato".
             bcs: Body Condition Score (1-9).
+            num_offspring: Número de crías (usado solo si lactante).
+            gestation_week: Semana de gestación 1-9 (0 = desconocida).
 
         Returns:
             DER en kcal/día.
@@ -84,6 +100,18 @@ class NRCCalculator:
                 f"Válidos: {sorted(ESTADO_REPRODUCTIVO_VALIDO)}"
             )
 
+        # --- Estado especial: GESTANTE ---
+        if reproductive_status == "gestante":
+            factor_gestacion = cls._get_factor_gestacion(species, gestation_week)
+            bcs_modifier = BCS(bcs).der_modifier
+            return rer * factor_gestacion * bcs_modifier
+
+        # --- Estado especial: LACTANTE ---
+        # La lactancia anula el bcs_modifier — la hembra está en hipercalórico fisiológico.
+        if reproductive_status == "lactante":
+            return cls._calculate_der_lactante(rer, species, num_offspring)
+
+        # --- Cálculo estándar ---
         factor_vida = cls._get_factor_vida(species, activity_level, reproductive_status)
         factor_edad = cls._get_factor_edad(species, age_months)
         bcs_modifier = BCS(bcs).der_modifier
@@ -91,7 +119,43 @@ class NRCCalculator:
         return rer * factor_vida * factor_edad * bcs_modifier
 
     @classmethod
+    def get_ideal_weight_by_species(
+        cls,
+        weight_kg: float,
+        bcs: int,
+        species: str,
+    ) -> float:
+        """
+        Estima el peso ideal con lógica diferenciada por especie (A-06).
+
+        Perros: cada unidad de BCS sobre 5 ≈ 10% exceso de peso corporal.
+        Gatos:  distribución de grasa diferente — cada unidad sobre 5 ≈ 400g exceso.
+
+        Args:
+            weight_kg: Peso real en kg.
+            bcs: Body Condition Score (1-9).
+            species: "perro" | "gato".
+
+        Returns:
+            Peso ideal estimado en kg.
+        """
+        if bcs == 5:
+            return weight_kg
+
+        if species == "gato":
+            bcs_offset = bcs - 5
+            if bcs_offset > 0:
+                return max(weight_kg - (bcs_offset * 0.4), 0.5)
+            return weight_kg + (abs(bcs_offset) * 0.3)
+
+        # Perro (y fallback)
+        excess_factor = 1.0 + (bcs - 5) * 0.1
+        return weight_kg / excess_factor
+
+    @classmethod
     def get_ideal_weight_estimate(cls, weight_kg: float, bcs: int) -> float:
+        """Compatibilidad hacia atrás — usa lógica de perro. Usar get_ideal_weight_by_species."""
+        return cls.get_ideal_weight_by_species(weight_kg, bcs, "perro")
         """
         Estima el peso ideal a partir del peso real y el BCS.
 
@@ -150,3 +214,39 @@ class NRCCalculator:
                 return factor
         # Fallback: adulto
         return 1.0
+
+    @classmethod
+    def _get_factor_gestacion(cls, species: str, gestation_week: int) -> float:
+        """
+        Retorna el factor de gestación según especie y semana.
+        Si gestation_week == 0 (desconocida), usa promedio_seguro.
+        """
+        tabla = (
+            FACTOR_GESTACION_PERRO if species == "perro"
+            else FACTOR_GESTACION_GATO
+        )
+        if gestation_week == 0:
+            return tabla["promedio_seguro"]
+        if gestation_week <= 4:
+            return tabla["primera_mitad"]
+        return tabla["segunda_mitad"]
+
+    @classmethod
+    def _calculate_der_lactante(
+        cls,
+        rer: float,
+        species: str,
+        num_offspring: int,
+    ) -> float:
+        """
+        DER para hembra lactante.
+        Perro: DER = RER × (4.0 + 0.2 × min(n_cachorros, 8))
+        Gato:  DER = RER × (2.0 + 0.3 × min(n_gatitos, 6))
+        """
+        if species == "perro":
+            n = min(num_offspring, FACTOR_LACTANCIA_MAX_CACHORROS)
+            factor = FACTOR_LACTANCIA_BASE_PERRO + (FACTOR_LACTANCIA_POR_CACHORRO * n)
+        else:
+            n = min(num_offspring, FACTOR_LACTANCIA_MAX_GATITOS)
+            factor = FACTOR_LACTANCIA_BASE_GATO + (FACTOR_LACTANCIA_POR_GATITO * n)
+        return rer * factor

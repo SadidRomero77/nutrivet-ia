@@ -38,6 +38,8 @@ class Size(str, Enum):
 class ReproductiveStatus(str, Enum):
     ESTERILIZADO = "esterilizado"
     NO_ESTERILIZADO = "no_esterilizado"
+    GESTANTE = "gestante"      # hembra en gestación — factores NRC especiales
+    LACTANTE = "lactante"      # hembra en lactancia — factores NRC especiales
 
 
 class DogActivityLevel(str, Enum):
@@ -63,7 +65,8 @@ class CurrentDiet(str, Enum):
 
 
 class MedicalCondition(str, Enum):
-    """Las 13 condiciones médicas soportadas por NutriVet.IA."""
+    """Las 17 condiciones médicas soportadas por NutriVet.IA."""
+    # Originales (13)
     DIABETICO = "diabético"
     HIPOTIROIDEO = "hipotiroideo"
     CANCERIGENO = "cancerígeno"
@@ -77,6 +80,11 @@ class MedicalCondition(str, Enum):
     GASTRITIS = "gastritis"
     CISTITIS_URINARIA = "cistitis/enfermedad_urinaria"
     SOBREPESO_OBESIDAD = "sobrepeso/obesidad"
+    # Nuevas (4) — validadas por Lady Carolina Castañeda (MV, BAMPYSVET)
+    INSUFICIENCIA_CARDIACA = "insuficiencia_cardiaca"
+    CUSHING = "hiperadrenocorticismo_cushing"
+    EPILEPSIA = "epilepsia"
+    MEGAESOFAGO = "megaesofago"
 
 
 _DOG_ACTIVITY_VALUES = frozenset(e.value for e in DogActivityLevel)
@@ -115,6 +123,10 @@ class PetProfile:
     current_diet: CurrentDiet = CurrentDiet.CONCENTRADO
     is_clinic_pet: bool = False
     vet_id: Optional[UUID] = None
+    # Campos adicionales para estados reproductivos especiales
+    num_offspring: int = 0          # Número de crías (lactante) o esperados (gestante)
+    gestation_week: int = 0         # Semana de gestación 1-9 (0 = desconocida)
+    breed_id: Optional[str] = None  # ID de raza del catálogo (A-01)
 
     def __post_init__(self) -> None:
         """Valida todas las invariantes del aggregate al instanciar."""

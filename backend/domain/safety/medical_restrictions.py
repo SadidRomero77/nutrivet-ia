@@ -167,6 +167,72 @@ RESTRICTIONS_BY_CONDITION: dict[str, ConditionRestrictions] = {
                        "control_estricto_de_porciones",
                        "ejercicio_complementario"},
     ),
+    # ── 4 condiciones nuevas ──────────────────────────────────────────────────
+    "insuficiencia_cardiaca": _r(
+        prohibited={"sodio_alto", "embutidos", "enlatados_salados", "queso",
+                    "jamón", "tocino", "sal_de_mesa", "caldos_salados",
+                    "alimentos_procesados_salados", "snacks_salados"},
+        limited={"sodio_total",              # meta: < 20 mg / 100 kcal
+                 "grasa_saturada",
+                 "líquido_excesivo_si_edema"},
+        recommended={"taurina",              # suplementación obligatoria
+                     "l_carnitina",          # cardiomiopatía dilatada
+                     "omega_3_epa_dha",      # antiinflamatorio cardíaco dosis alta
+                     "proteína_digestible_moderada",
+                     "carbohidratos_digestibles"},
+        special_rules={"sodio_máximo_20mg_por_100kcal",
+                       "taurina_obligatoria_100mg_kg_dia",
+                       "comidas_pequeñas_y_frecuentes",
+                       "monitoreo_peso_diario_retención_líquidos",
+                       "sin_ejercicio_intenso_post_comida"},
+    ),
+    "hiperadrenocorticismo_cushing": _r(
+        prohibited={"azúcares_simples", "glucosa", "fructosa_libre",
+                    "alimentos_alto_ig", "grasa_alta", "sodio_alto",
+                    "alimentos_ultraprocesados"},
+        limited={"carbohidratos_totales", "calorías_totales",
+                 "fósforo",   # frecuente comorbilidad renal
+                 "grasa_total"},
+        recommended={"proteína_magra_alta_digestibilidad",
+                     "fibra_soluble",
+                     "carbohidratos_complejos_bajo_ig",
+                     "omega_3_antiinflamatorio"},
+        special_rules={"control_glucémico_como_diabético",
+                       "control_peso_estricto",       # polifagia frecuente — NO aumentar ración
+                       "evaluación_función_renal_asociada",
+                       "polifagia_no_justifica_aumento_ración"},
+    ),
+    "epilepsia": _r(
+        prohibited={"glutamato_monosódico", "colorantes_artificiales",
+                    "conservantes_artificiales_bha_bht",
+                    "azúcares_refinados"},
+        limited={"carbohidratos_totales",   # si se indica dieta cetogénica
+                 "carbohidratos_simples"},
+        recommended={"omega_3_dha",         # neuroprotector
+                     "magnesio",            # cofactor neurológico
+                     "taurina",             # neuromodulador
+                     "antioxidantes_vitamina_e",
+                     "proteína_digestible_alta_calidad"},
+        special_rules={"sin_glutamato_agregado",
+                       "dieta_cetogénica_solo_si_indicada_por_vet",
+                       "regularidad_horaria_estricta",   # irregularidad precipita crisis
+                       "no_ayuno_mayor_8h"},             # hipoglucemia precipita crisis
+    ),
+    "megaesofago": _r(
+        prohibited={"croquetas_secas_sin_remojar", "huesos", "alimentos_duros",
+                    "alimentos_fibrosos_difícil_deglución",
+                    "sólidos_grandes"},
+        limited={"tamaño_porción",
+                 "volumen_por_comida"},
+        recommended={"dieta_húmeda_o_papilla",
+                     "proteína_magra_cocida_bien_blanda",
+                     "alimentos_temperatura_ambiente"},
+        special_rules={"POSICIÓN_VERTICAL_OBLIGATORIA_BAILEY_CHAIR",
+                       "30_minutos_vertical_post_comida",
+                       "porciones_muy_pequeñas_mínimo_4_comidas_dia",
+                       "ALERTA_NEUMONÍA_ASPIRATIVA_P0",
+                       "supervisión_directa_alimentación"},
+    ),
 }
 
 # Conjunto de condiciones válidas para validación rápida

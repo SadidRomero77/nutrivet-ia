@@ -59,5 +59,36 @@ ACTIVIDAD_VALIDA_GATO: frozenset[str] = frozenset({
 })
 
 ESTADO_REPRODUCTIVO_VALIDO: frozenset[str] = frozenset({
-    "esterilizado", "no_esterilizado"
+    "esterilizado", "no_esterilizado", "gestante", "lactante"
 })
+
+# --- Factores de gestación (NRC 2006) ---
+# La gestación se trata aparte del lookup FACTOR_VIDA porque el factor
+# depende de la semana, no de la combinación actividad×reproductivo.
+#
+# Primera mitad (semanas 1-4): demanda similar a adulto normal
+# Segunda mitad (semanas 5-9): alta demanda fetal y placentaria
+# Promedio seguro: usado cuando no se conoce la semana
+FACTOR_GESTACION_PERRO: dict[str, float] = {
+    "primera_mitad": 1.6,    # semanas 1-4
+    "segunda_mitad": 3.0,    # semanas 5-9
+    "promedio_seguro": 2.0,  # semana desconocida
+}
+
+FACTOR_GESTACION_GATO: dict[str, float] = {
+    "primera_mitad": 1.6,
+    "segunda_mitad": 2.0,    # gatos tienen menor variación que perros
+    "promedio_seguro": 1.8,
+}
+
+# --- Factores de lactancia (NRC 2006) ---
+# Función: DER = RER × (4.0 + 0.2 × n_cachorros)  → perros
+#          DER = RER × (2.0 + 0.3 × n_gatitos)     → gatos
+# La lactancia anula el BCS modifier — la hembra debe estar en hipercalórico.
+FACTOR_LACTANCIA_BASE_PERRO: float = 4.0
+FACTOR_LACTANCIA_POR_CACHORRO: float = 0.2
+FACTOR_LACTANCIA_MAX_CACHORROS: int = 8     # cap para evitar sobreestimación
+
+FACTOR_LACTANCIA_BASE_GATO: float = 2.0
+FACTOR_LACTANCIA_POR_GATITO: float = 0.3
+FACTOR_LACTANCIA_MAX_GATITOS: int = 6
