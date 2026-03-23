@@ -235,6 +235,69 @@ Reglas de la modalidad mixta:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# BLOQUE 3b — Seguridad bacteriológica BARF (B-03)
+# Solo se inyecta cuando modality == "natural"
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_BLOQUE_BARF_SEGURIDAD = """
+PROTOCOLO DE SEGURIDAD — DIETA NATURAL (BARF/CASERA):
+
+RIESGO BACTERIOLÓGICO — incluir SIEMPRE en alertas_propietario:
+La carne cruda puede contener Salmonella, Listeria monocytogenes y E.coli.
+Estos patógenos son ZOONÓTICOS — transmisibles a humanos, especialmente niños
+menores de 5 años, adultos mayores e inmunocomprometidos.
+
+ADVERTENCIAS OBLIGATORIAS que debes incluir en alertas_propietario:
+1. Lavado de manos con jabón después de preparar y servir el alimento
+2. Desinfectar superficies y utensilios con agua caliente + detergente
+3. Descongelar en refrigerador, nunca a temperatura ambiente
+4. No compartir utensilios con los de la familia
+5. Supervisar que la mascota no lama personas ni objetos post-comida
+
+CASOS DE ALTO RIESGO — recomendar cocción parcial o plan cocido en notas_clinicas si aplica:
+- Mascotas con inmunosupresión (quimioterapia, corticoides crónicos)
+- Cachorros menores de 12 semanas
+- Geriátricos (perros > 10 años, gatos > 12 años)
+- Hogares con embarazadas o personas con inmunodepresión
+""".strip()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BLOQUE 3c — Protocolo IG para diabéticos (B-04)
+# Solo se inyecta cuando "diabético" está en las condiciones
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_BLOQUE_IG_DIABETICO = """
+PROTOCOLO ÍNDICE GLUCÉMICO — DIABETES MELLITUS:
+El índice glucémico (IG) de los carbohidratos es CRÍTICO para evitar picos post-prandiales.
+
+CARBOHIDRATOS PERMITIDOS (IG bajo — priorizar):
+- Avena integral cocida (IG ≈ 42) ✓ PRIMERA OPCIÓN
+- Cebada perlada cocida (IG ≈ 25) ✓ EXCELENTE
+- Batata/camote cocida (IG ≈ 54) ✓
+- Arroz integral cocido (IG ≈ 55) ✓
+- Quinoa cocida (IG ≈ 53) ✓
+- Calabaza/ahuyama cocida (IG ≈ 45) ✓
+
+CARBOHIDRATOS LIMITADOS (IG medio — máx 15% de la ración):
+- Zanahoria cocida (IG ≈ 47)
+- Papa cocida en pequeña cantidad
+
+CARBOHIDRATOS PROHIBIDOS (IG alto — no incluir):
+- Arroz blanco refinado (IG ≈ 72) ✗
+- Pan, harina, pasta (IG > 70) ✗
+- Plátano maduro, mango (IG > 65) ✗
+- Maíz (IG ≈ 70) ✗
+
+REGLAS DE SINCRONIZACIÓN TEMPORAL:
+- Comidas a HORARIO FIJO — irregularidad desestabiliza glucemia
+- Si recibe insulina: sincronizar comida con aplicación según protocolo veterinario
+- NUNCA saltarse comida si recibe insulina — riesgo de hipoglucemia severa
+- Fibra soluble (psyllium, linaza molida): añadir en cada comida para ralentizar absorción
+""".strip()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # BLOQUE 5 — Guardarraíles anti-alucinación
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -433,9 +496,19 @@ def build_plan_system_prompt(
         "\n" + modality_block,
     ]
 
+    # B-03 — BARF bacteriological safety block (solo dieta natural/BARF)
+    if modality in ("natural", "barf"):
+        parts.append("\n\n" + "=" * 70)
+        parts.append("\n" + _BLOQUE_BARF_SEGURIDAD)
+
     if condition_block:
         parts.append("\n\n" + "=" * 70)
         parts.append("\n" + condition_block)
+
+    # B-04 — IG protocol (solo si diabético está en las condiciones)
+    if "diabético" in [c.lower() for c in conditions]:
+        parts.append("\n\n" + "=" * 70)
+        parts.append("\n" + _BLOQUE_IG_DIABETICO)
 
     parts.append("\n\n" + "=" * 70)
     parts.append("\n" + _BLOQUE_PLAN_CLINICO)

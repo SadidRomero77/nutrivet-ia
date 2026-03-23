@@ -239,6 +239,11 @@ class PlanOutputSchema(BaseModel):
         default_factory=list,
         description="Alertas importantes para el propietario",
     )
+    alertas_barf: list[str] = Field(
+        default_factory=list,
+        description="Alertas de seguridad bacteriológica BARF (solo dieta natural). "
+                    "Vacío para dieta de concentrado.",
+    )
 
     @model_validator(mode="after")
     def validar_suma_ingredientes(self) -> "PlanOutputSchema":
@@ -379,6 +384,7 @@ NO incluyas markdown (```json), NO texto antes o después del JSON.
     "senales_de_alerta": ["<síntoma que requiere suspender transición>"]
   },
   "notas_clinicas": ["<nota para el veterinario revisor>"],
-  "alertas_propietario": ["<alerta importante para el propietario>"]
+  "alertas_propietario": ["<alerta importante para el propietario>"],
+  "alertas_barf": ["<solo si dieta natural: alerta de seguridad bacteriológica BARF>"]
 }
 """

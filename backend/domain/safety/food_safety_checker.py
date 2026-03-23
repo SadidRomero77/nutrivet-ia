@@ -1,16 +1,38 @@
 """
-FoodSafetyChecker — Verificación determinista de toxicidad de alimentos.
+FoodSafetyChecker — Verificación determinista de toxicidad y seguridad alimentaria.
 Constitution REGLA 1: tolerancia CERO — un ingrediente tóxico = plan rechazado.
+
+Incluye verificaciones adicionales:
+- Tiaminasa en pescado crudo (riesgo neurológico en gatos) — B-03/A-02
+- Lipidosis hepática felina por ayuno (C-06)
 
 Este módulo es Python puro. Cero dependencias externas. Cero llamadas a LLM.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import Optional
 
 from backend.domain.safety.toxic_foods import (
     SCIENTIFIC_ALIASES,
     TOXIC_CATS,
     TOXIC_DOGS,
 )
+
+# ---------------------------------------------------------------------------
+# Alimentos crudos con tiaminasa activa — CRÍTICO para gatos
+# La cocción destruye la tiaminasa. Solo aplica a dieta cruda (BARF/natural).
+# Fuente: NRC 2006, Thiaminase activity in fish — Int J Vitam Nutr Res 1992
+# ---------------------------------------------------------------------------
+_TIAMINASA_INGREDIENTS: frozenset[str] = frozenset({
+    "sardina cruda", "sardinas crudas",
+    "atún crudo", "salmón crudo",
+    "tilapia cruda", "trucha cruda",
+    "carpa cruda", "carpa",
+    "arenque crudo",
+    "pescado crudo", "pez crudo",
+    "bacalao crudo",
+})
 
 
 @dataclass(frozen=True)
@@ -118,6 +140,104 @@ class FoodSafetyChecker:
             frozenset con los nombres canónicos de ingredientes tóxicos.
         """
         return cls._get_toxic_set_for_species(species)
+
+    @classmethod
+    def check_tiaminasa_risk(
+        cls,
+        ingredients: list[str],
+        species: str,
+        diet_type: str = "natural",
+    ) -> Optional[str]:
+        """
+        Verifica riesgo de deficiencia de tiamina (B1) por tiaminasa en pescado crudo.
+
+        Solo aplica a GATOS con dieta natural/BARF. La cocción destruye la tiaminasa
+        — sardinas enlatadas y pescado cocido son seguros.
+
+        Args:
+            ingredients: Lista de nombres de ingredientes del plan.
+            species:     "perro" | "gato".
+            diet_type:   "natural" | "barf" | "concentrado" | "mixto".
+
+        Returns:
+            Mensaje de alerta (str) si hay riesgo, None si es seguro.
+        """
+        if species != "gato":
+            return None
+        if diet_type not in ("natural", "barf"):
+            return None
+
+        normalized = {cls._normalize(ing) for ing in ingredients}
+        risky = normalized & _TIAMINASA_INGREDIENTS
+        if risky:
+            items = ", ".join(sorted(risky))
+            return (
+                f"ALERTA TIAMINASA — GATOS: {items} contiene(n) tiaminasa activa "
+                "que destruye la vitamina B1 (tiamina). Riesgo de convulsiones y daño "
+                "neurológico irreversible. Opciones seguras: (1) cocinar el pescado, "
+                "(2) reemplazar por sardinas en agua enlatadas (cocidas), "
+                "(3) suplementar tiamina 1-2 mg/kg/día si el plan incluye pescado crudo."
+            )
+        return None
+
+    @classmethod
+    def check_feline_fasting_risk(
+        cls,
+        species: str,
+        hours_without_food: Optional[int],
+        conditions: list[str] | None = None,
+    ) -> Optional[str]:
+        """
+        Alerta crítica de lipidosis hepática (hígado graso) en gatos en ayuno.
+
+        Un gato que no come > 24 horas está en riesgo real de lipidosis hepática,
+        una emergencia médica potencialmente letal. El riesgo es MAYOR en gatos
+        con sobrepeso/obesidad — paradójicamente son los más susceptibles.
+
+        Args:
+            species:            "perro" | "gato".
+            hours_without_food: Horas sin comer (None = desconocido).
+            conditions:         Condiciones médicas activas (para detectar sobrepeso).
+
+        Returns:
+            Mensaje de alerta urgente (str) si aplica, None si no aplica.
+        """
+        if species != "gato":
+            return None
+        if hours_without_food is None:
+            return None
+
+        conditions_set = set(conditions or [])
+        tiene_sobrepeso = "sobrepeso/obesidad" in conditions_set
+
+        if hours_without_food >= 48:
+            base = (
+                "⚠️ EMERGENCIA VETERINARIA — LIPIDOSIS HEPÁTICA: "
+                f"El gato lleva {hours_without_food} horas sin comer. "
+                "La lipidosis hepática (hígado graso) es una emergencia médica letal. "
+                "Acudir a urgencias veterinarias INMEDIATAMENTE. No esperar."
+            )
+            if tiene_sobrepeso:
+                base += (
+                    " RIESGO CRÍTICO ELEVADO: el sobrepeso aumenta significativamente "
+                    "la susceptibilidad a lipidosis con ayunos breves."
+                )
+            return base
+
+        if hours_without_food >= 24:
+            msg = (
+                "⚠️ ALERTA LIPIDOSIS HEPÁTICA: El gato lleva "
+                f"{hours_without_food} horas sin comer. "
+                "En gatos, el ayuno de 24-48h puede desencadenar lipidosis hepática. "
+                "Contactar al veterinario hoy. Intentar estimular el apetito "
+                "(calentar la comida, cambiar textura). Si no come en las próximas "
+                "4-6 horas, acudir a urgencias."
+            )
+            if tiene_sobrepeso:
+                msg += " ATENCIÓN ESPECIAL: el sobrepeso eleva el riesgo."
+            return msg
+
+        return None
 
     # --- Métodos privados ---
 

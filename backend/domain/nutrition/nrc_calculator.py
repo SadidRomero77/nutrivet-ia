@@ -68,6 +68,7 @@ class NRCCalculator:
         bcs: int,
         num_offspring: int = 0,
         gestation_week: int = 0,
+        breed_adult_months: int = 0,
     ) -> float:
         """
         Calcula el Requerimiento Energético Diario (DER).
@@ -87,6 +88,10 @@ class NRCCalculator:
             bcs: Body Condition Score (1-9).
             num_offspring: Número de crías (usado solo si lactante).
             gestation_week: Semana de gestación 1-9 (0 = desconocida).
+            breed_adult_months: Edad de madurez de la raza en meses (0 = usar default
+                                de la especie). Para razas gigantes (Gran Danés,
+                                Bernes, Rottweiler) este valor es 18-24 — el factor
+                                cachorro se aplica hasta esa edad, no hasta los 12 meses.
 
         Returns:
             DER en kcal/día.
@@ -113,7 +118,7 @@ class NRCCalculator:
 
         # --- Cálculo estándar ---
         factor_vida = cls._get_factor_vida(species, activity_level, reproductive_status)
-        factor_edad = cls._get_factor_edad(species, age_months)
+        factor_edad = cls._get_factor_edad(species, age_months, breed_adult_months)
         bcs_modifier = BCS(bcs).der_modifier
 
         return rer * factor_vida * factor_edad * bcs_modifier
@@ -206,8 +211,28 @@ class NRCCalculator:
             )
 
     @classmethod
-    def _get_factor_edad(cls, species: str, age_months: int) -> float:
-        """Obtiene el factor de etapa de vida según la especie y edad."""
+    def _get_factor_edad(
+        cls, species: str, age_months: int, breed_adult_months: int = 0
+    ) -> float:
+        """
+        Obtiene el factor de etapa de vida según la especie y edad.
+
+        Para razas gigantes (breed_adult_months ≥ 18), el factor cachorro (2.0)
+        se aplica hasta la edad de madurez real de la raza.
+        Ejemplo: Gran Danés 14 meses → factor 2.0 (cachorro), NO 1.2 (adulto joven).
+        Sin breed_adult_months se usa la tabla genérica por especie.
+        """
+        # Lógica especial para razas gigantes en perros
+        if species == "perro" and breed_adult_months >= 18:
+            if age_months <= 3:
+                return 3.0   # Cachorro muy temprano
+            elif age_months <= breed_adult_months:
+                return 2.0   # Cachorro hasta la madurez real de la raza
+            elif age_months <= 24:
+                return 1.2   # Adulto joven post-madurez
+            else:
+                return 1.0   # Adulto / senior
+
         tabla = FACTOR_EDAD_PERRO if species == "perro" else FACTOR_EDAD_GATO
         for (min_age, max_age), factor in tabla:
             if min_age <= age_months <= max_age:
