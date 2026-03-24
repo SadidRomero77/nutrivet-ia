@@ -1464,6 +1464,366 @@ PROTOCOL_SOBREPESO = ConditionProtocol(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PROTOCOLOS — 4 CONDICIONES NUEVAS (A-04)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+PROTOCOL_ICC = ConditionProtocol(
+    condition_id="insuficiencia_cardiaca",
+    display_name="Insuficiencia Cardíaca Congestiva (ICC)",
+    dietary_goals=[
+        "Restricción estricta de sodio (< 20 mg/100 kcal) para reducir retención de líquidos",
+        "Suplementación terapéutica de taurina (100 mg/kg/día) y L-carnitina",
+        "Omega-3 EPA+DHA en dosis alta antiinflamatoria cardíaca (40 mg/kg/día)",
+        "Mantener masa muscular con proteína digestible moderada",
+        "Prevenir caquexia cardíaca — densidad calórica adecuada en pocas porciones",
+    ],
+    proteina_pct_ms_min=22.0,
+    proteina_pct_ms_max=30.0,
+    grasa_pct_ms_max=15.0,
+    fibra_pct_ms_min=3.0,
+    fibra_pct_ms_max=8.0,
+    fosforo_restringido=False,
+    fosforo_g_por_100kcal_max=None,
+    sodio_mg_dia_max=50,       # < 20 mg/100 kcal → aprox 50 mg/día para mascota ~10kg
+    magnesio_restringido=False,
+    cobre_restringido=False,
+    ingredientes_preferidos=[
+        "Pechuga de pollo cocida sin piel",
+        "Pechuga de pavo cocida",
+        "Sardinas en agua sin sal",
+        "Clara de huevo cocida",
+        "Arroz blanco o integral cocido (sin sal)",
+        "Batata/camote cocida",
+        "Zanahoria cocida",
+        "Calabaza/ahuyama cocida",
+        "Aceite de salmón (omega-3)",
+    ],
+    ingredientes_a_evitar=[
+        "Sal de mesa, salsa de soya, caldos salados",
+        "Embutidos, jamón, tocino, queso",
+        "Enlatados con sal (usar solo sin sal añadida)",
+        "Snacks salados comerciales",
+        "Alimentos procesados con sodio > 100 mg/100g",
+    ],
+    numero_comidas_dia=3,
+    reglas_especiales=[
+        "CRÍTICO: sodio máximo 20 mg/100 kcal — pesar y calcular cada ingrediente",
+        "Taurina OBLIGATORIA 100 mg/kg/día — suplementar siempre",
+        "Comidas pequeñas y frecuentes — evitar sobrecarga post-prandial",
+        "Monitorear peso diario — aumento súbito indica retención de líquidos",
+        "Sin ejercicio intenso post-comida",
+        "Si hay edema: restricción adicional de líquidos según criterio veterinario",
+    ],
+    nota_perro=(
+        "Razas predispuestas a DCM (Cocker Spaniel, Boxer, Doberman, Golden Retriever, "
+        "Dálmata, Labrador): suplementar L-carnitina además de taurina. "
+        "ACVIM 2019: no esperar deficiencia confirmada — suplementar preventivamente."
+    ),
+    nota_gato=(
+        "Cardiomiopatía hipertrófica (HCM) en gatos: taurina 250 mg/kg/día obligatoria. "
+        "Maine Coon y Ragdoll: predisposición genética — comenzar suplementación a los 2 años. "
+        "Gatos: menor necesidad de restricción de sodio que perros con HCM."
+    ),
+    suplementos=[
+        SupplementoRecomendado(
+            nombre="Taurina",
+            dosis_perro="100 mg/kg/día",
+            dosis_gato="250 mg/kg/día",
+            frecuencia="diario",
+            forma="polvo mezclado en alimento o cápsula abierta",
+            justificacion_clinica="Obligatoria en ICC — deficiencia documentada en DCM (NRC 2006, ACVIM 2019)",
+        ),
+        SupplementoRecomendado(
+            nombre="L-Carnitina",
+            dosis_perro="50 mg/kg/día",
+            dosis_gato="50 mg/kg/día",
+            frecuencia="diario",
+            forma="polvo o cápsula",
+            justificacion_clinica="Cardiomiopatía dilatada — deficiencia en Cocker Spaniel y Boxer (ACVIM 2019)",
+        ),
+        SupplementoRecomendado(
+            nombre="Omega-3 EPA+DHA",
+            dosis_perro="40 mg/kg/día",
+            dosis_gato="25 mg/kg/día",
+            frecuencia="diario",
+            forma="aceite de salmón o cápsulas omega-3 marino",
+            justificacion_clinica="Antiinflamatorio cardíaco en dosis alta — ACVIM 2019",
+        ),
+    ],
+    parametros_monitoreo=[
+        "Peso diario en casa (balanza)",
+        "Circunferencia abdominal semanal (ascitis)",
+        "Frecuencia cardíaca y respiratoria en reposo",
+        "Ionograma (K+, Na+, Mg2+) cada 4-8 semanas",
+        "Ecocardiograma cada 3-6 meses según evolución",
+    ],
+    justificacion=(
+        "ICC requiere manejo nutricional multimodal: restricción de sodio para reducir precarga, "
+        "suplementación de taurina/L-carnitina para soporte miocárdico, y omega-3 antiinflamatorio. "
+        "El manejo dietético complementa — no reemplaza — el tratamiento farmacológico."
+    ),
+)
+
+
+PROTOCOL_CUSHING = ConditionProtocol(
+    condition_id="hiperadrenocorticismo_cushing",
+    display_name="Hiperadrenocorticismo (Síndrome de Cushing)",
+    dietary_goals=[
+        "Control glucémico estricto — similar a diabético (resistencia a insulina frecuente)",
+        "Control calórico estricto — polifagia del Cushing NO justifica aumentar ración",
+        "Proteína magra de alta digestibilidad para preservar masa muscular",
+        "Fibra soluble para control de peso y modulación glucémica",
+        "Evaluar función renal — comorbilidad frecuente (restricción de fósforo si aplica)",
+    ],
+    proteina_pct_ms_min=25.0,
+    proteina_pct_ms_max=35.0,
+    grasa_pct_ms_max=12.0,
+    fibra_pct_ms_min=8.0,
+    fibra_pct_ms_max=18.0,
+    fosforo_restringido=False,
+    fosforo_g_por_100kcal_max=None,
+    sodio_mg_dia_max=None,
+    magnesio_restringido=False,
+    cobre_restringido=False,
+    ingredientes_preferidos=[
+        "Pechuga de pollo cocida sin piel",
+        "Pechuga de pavo cocida",
+        "Clara de huevo cocida",
+        "Avena integral cocida (IG bajo, fibra soluble)",
+        "Batata/camote cocida (IG moderado)",
+        "Brócoli cocido",
+        "Zanahoria cocida",
+        "Calabaza/ahuyama cocida",
+        "Linaza molida (fibra soluble)",
+    ],
+    ingredientes_a_evitar=[
+        "Azúcares simples, miel, glucosa",
+        "Alimentos de alto IG (arroz blanco en exceso, pan, papa)",
+        "Grasas saturadas en exceso",
+        "Snacks hipercalóricos",
+        "Alimentos ultraprocesados",
+    ],
+    numero_comidas_dia=3,
+    reglas_especiales=[
+        "POLIFAGIA: el Cushing causa hambre excesiva — NUNCA aumentar ración por esta razón",
+        "Control de peso estricto — la obesidad empeora la resistencia a insulina",
+        "Horarios fijos de alimentación como en diabético",
+        "Si hay diabetes concurrente: aplicar restricciones de ambas condiciones",
+        "Evaluar función renal antes y durante el tratamiento — ajustar fósforo si aplica",
+        "Si recibe trilostano/mitotano: mantener horarios de comida fijos — riesgo crisis Addison",
+    ],
+    nota_perro=(
+        "Cushing en perros: casi siempre hipófiso-dependiente (85%). "
+        "Distribución abdominal de grasa característica. "
+        "Alto riesgo de diabetes mellitus concurrente — monitoreo glucémico rutinario."
+    ),
+    nota_gato=(
+        "Cushing felino es raro — frecuentemente asociado a diabetes mellitus resistente a insulina. "
+        "Tratar diabetes primero; el manejo dietético es el del diabético felino."
+    ),
+    suplementos=[
+        SupplementoRecomendado(
+            nombre="Omega-3 EPA+DHA",
+            dosis_perro="30 mg/kg/día",
+            dosis_gato="20 mg/kg/día",
+            frecuencia="diario",
+            forma="aceite de salmón o cápsulas",
+            justificacion_clinica="Antiinflamatorio sistémico — reduce inflamación por exceso de cortisol",
+        ),
+    ],
+    parametros_monitoreo=[
+        "Peso semanal",
+        "Glucemia en ayunas si hay diabetes concurrente",
+        "Ionograma (riesgo hiperpotasemia con trilostano)",
+        "Cortisol (ACTH estimulación) según protocolo veterinario",
+        "Función renal (BUN, creatinina) semestral",
+    ],
+    justificacion=(
+        "El Cushing genera un estado metabólico complejo con resistencia a insulina, "
+        "catabolismo muscular y redistribución grasa. El manejo nutricional replica "
+        "el del diabético con énfasis adicional en control calórico — la polifagia "
+        "es una trampa frecuente de sobrealimentación."
+    ),
+)
+
+
+PROTOCOL_EPILEPSIA = ConditionProtocol(
+    condition_id="epilepsia",
+    display_name="Epilepsia",
+    dietary_goals=[
+        "Eliminar posibles desencadenantes dietéticos (glutamato, colorantes artificiales)",
+        "DHA neuroprotector en dosis terapéutica (25 mg/kg/día)",
+        "Regularidad horaria estricta — la irregularidad puede precipitar crisis",
+        "Evitar hipoglucemia — no ayunos > 8 horas",
+        "Si indicado por veterinario: dieta cetogénica (alta grasa, mínimos carbohidratos)",
+    ],
+    proteina_pct_ms_min=25.0,
+    proteina_pct_ms_max=35.0,
+    grasa_pct_ms_max=20.0,
+    fibra_pct_ms_min=3.0,
+    fibra_pct_ms_max=10.0,
+    fosforo_restringido=False,
+    fosforo_g_por_100kcal_max=None,
+    sodio_mg_dia_max=None,
+    magnesio_restringido=False,
+    cobre_restringido=False,
+    ingredientes_preferidos=[
+        "Pechuga de pollo cocida sin piel (sin aditivos)",
+        "Salmón cocido (omega-3 DHA elevado)",
+        "Huevo entero cocido",
+        "Arroz blanco cocido (sin sal, sin condimentos)",
+        "Batata/camote cocida",
+        "Brócoli cocido",
+        "Espinaca cocida (magnesio)",
+        "Semillas de calabaza (magnesio — molidas)",
+    ],
+    ingredientes_a_evitar=[
+        "Glutamato monosódico (MSG) — potencial desencadenante",
+        "Colorantes artificiales (tartrazina, rojo 40, amarillo 5)",
+        "Conservantes artificiales (BHA, BHT, etoxiquina)",
+        "Azúcares refinados — pueden causar hipoglucemia reactiva",
+        "Alimentos ultraprocesados con aditivos",
+        "Alcohol etílico — obvio pero importante en preparaciones caseras",
+    ],
+    numero_comidas_dia=3,
+    reglas_especiales=[
+        "HORARIO FIJO OBLIGATORIO — irregularidad puede precipitar crisis epiléptica",
+        "NUNCA ayuno > 8 horas — hipoglucemia es desencadenante de crisis",
+        "Sin glutamato agregado en NINGÚN ingrediente del plan",
+        "Solo ingredientes naturales sin aditivos artificiales",
+        "Si bromuro de potasio: mantener nivel de sal CONSTANTE (variación precipita crisis)",
+        "Dieta cetogénica SOLO si indicada explícitamente por veterinario neurólogo",
+    ],
+    nota_perro=(
+        "Epilepsia idiopática en perros: frecuente en Border Collie, Labrador, Golden, Beagle. "
+        "El manejo dietético es adyuvante — no reemplaza anticonvulsivantes. "
+        "Fenobarbital induce catabolismo de vitaminas B y D — suplementar."
+    ),
+    nota_gato=(
+        "Epilepsia en gatos: menos frecuente que en perros, frecuentemente sintomática. "
+        "Descartar toxicidad (lilium, permetrina) antes de diagnóstico de epilepsia idiopática. "
+        "Dieta natural sin aditivos es especialmente relevante para gatos."
+    ),
+    suplementos=[
+        SupplementoRecomendado(
+            nombre="Omega-3 DHA",
+            dosis_perro="25 mg/kg/día",
+            dosis_gato="15 mg/kg/día",
+            frecuencia="diario",
+            forma="aceite de salmón (alto DHA) o aceite de krill",
+            justificacion_clinica="DHA neuroprotector — J Vet Intern Med 2012: reduce frecuencia de crisis",
+        ),
+        SupplementoRecomendado(
+            nombre="Magnesio (glicinato)",
+            dosis_perro="1.5 mg/kg/día",
+            dosis_gato="1.0 mg/kg/día",
+            frecuencia="diario",
+            forma="glicinato de magnesio o citrato (NOT óxido)",
+            justificacion_clinica="Cofactor neurológico — modulador NMDA, déficit documentado en epilépticos",
+            contraindicaciones=["Insuficiencia renal"],
+        ),
+    ],
+    parametros_monitoreo=[
+        "Registro de crisis (fecha, duración, tipo) — diario idealmente",
+        "Nivel sérico de anticonvulsivante cada 6 meses",
+        "Función hepática (fenobarbital es hepatotóxico a largo plazo) cada 6 meses",
+        "Vitamina D sérica si recibe fenobarbital > 6 meses",
+    ],
+    justificacion=(
+        "El manejo nutricional en epilepsia busca eliminar desencadenantes dietéticos, "
+        "proveer soporte neuroprotector (DHA, magnesio) y garantizar regularidad glucémica. "
+        "La regularidad horaria es tan importante como la composición del plan."
+    ),
+)
+
+
+PROTOCOL_MEGAESOFAGO = ConditionProtocol(
+    condition_id="megaesofago",
+    display_name="Megaesófago",
+    dietary_goals=[
+        "Textura adaptada para facilitar deglución y tránsito esofágico",
+        "Prevenir regurgitación y neumonía aspirativa (emergencia P0)",
+        "Posición vertical OBLIGATORIA durante y post-comida (Bailey chair)",
+        "Porciones pequeñas y frecuentes — nunca volúmenes grandes",
+        "Mantener estado nutricional adecuado pese a pérdidas por regurgitación",
+    ],
+    proteina_pct_ms_min=25.0,
+    proteina_pct_ms_max=35.0,
+    grasa_pct_ms_max=20.0,
+    fibra_pct_ms_min=1.0,
+    fibra_pct_ms_max=5.0,      # Fibra baja — facilita tránsito
+    fosforo_restringido=False,
+    fosforo_g_por_100kcal_max=None,
+    sodio_mg_dia_max=None,
+    magnesio_restringido=False,
+    cobre_restringido=False,
+    ingredientes_preferidos=[
+        "Caldo de cocción suave (sin sal) como base líquida",
+        "Pechuga de pollo muy bien cocida y desmenuzada en papilla",
+        "Huevo pochado o revuelto blando",
+        "Arroz blanco muy cocido (consistencia papilla)",
+        "Batata/camote cocida en puré",
+        "Calabaza/ahuyama cocida en puré",
+        "Zanahoria cocida en puré",
+    ],
+    ingredientes_a_evitar=[
+        "Croquetas secas sin remojar",
+        "Alimentos sólidos de tamaño grande",
+        "Huesos o cartílagos",
+        "Alimentos fibrosos duros (zanahoria cruda, apio crudo)",
+        "Alimentos fríos directamente del refrigerador",
+        "Trozos grandes de carne sin desmenuzar",
+    ],
+    numero_comidas_dia=4,      # Mínimo 4 comidas al día
+    reglas_especiales=[
+        "⚠️ POSICIÓN VERTICAL OBLIGATORIA (Bailey chair o similar) durante TODA la comida",
+        "⚠️ Mantener vertical 30 MINUTOS post-comida — previene neumonía aspirativa",
+        "⚠️ ALERTA NEUMONÍA ASPIRATIVA — cualquier signo respiratorio → urgencias",
+        "Porciones muy pequeñas (50-100g máximo por comida en perros medianos)",
+        "Consistencia: papilla o semilíquido — NUNCA sólidos sin licuar",
+        "Temperatura: a temperatura ambiente o tibia — nunca fría ni muy caliente",
+        "Supervisión directa en CADA comida — no dejar comer solo",
+        "Si el paciente regurgita > 3 veces/día → revisión veterinaria urgente",
+    ],
+    nota_perro=(
+        "Megaesófago en perros: frecuente en Setter Irlandés, Gran Danés, Labrador, "
+        "Schnauzer Gigante. Puede ser congénito (cachorros) o adquirido (adultos — "
+        "frecuentemente asociado a miastenia gravis, hipotiroidismo, Addison). "
+        "Tratar la causa subyacente es fundamental para mejorar el manejo."
+    ),
+    nota_gato=(
+        "Megaesófago en gatos es poco frecuente — descartar cuerpo extraño, "
+        "estrechez esofágica o neoplasia. El manejo dietético es igual al canino."
+    ),
+    suplementos=[
+        SupplementoRecomendado(
+            nombre="Vitamina B12 (cianocobalamina)",
+            dosis_perro="250-500 mcg/semana (subcutáneo) o 1000 mcg/día oral",
+            dosis_gato="250 mcg/semana",
+            frecuencia="semanal (SC) o diario (oral)",
+            forma="Inyectable SC preferido — mejor absorción. Oral si no es posible",
+            justificacion_clinica=(
+                "Absorción intestinal frecuentemente comprometida en megaesófago "
+                "con dismotilidad — suplementar vía parenteral es más confiable."
+            ),
+        ),
+    ],
+    parametros_monitoreo=[
+        "Frecuencia de regurgitación (registro diario)",
+        "Peso semanal — pérdida indica nutrición insuficiente",
+        "Temperatura y frecuencia respiratoria (alerta neumonía aspirativa)",
+        "Radiografía torácica mensual si hay sospecha de aspiración",
+        "Causa subyacente: AChR-Ab para miastenia gravis, T4 para hipotiroidismo",
+    ],
+    justificacion=(
+        "El megaesófago requiere el mayor nivel de adaptación de manejo alimentario. "
+        "La neumonía aspirativa es la complicación más grave y frecuente causa de muerte. "
+        "La posición vertical y las porciones pequeñas son tan críticas como la composición del plan."
+    ),
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # ÍNDICE — diccionario por condition_id para lookup rápido
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1483,6 +1843,11 @@ ALL_PROTOCOLS: dict[str, ConditionProtocol] = {
         PROTOCOL_GASTRITIS,
         PROTOCOL_CISTITIS,
         PROTOCOL_SOBREPESO,
+        # ── 4 condiciones nuevas (A-04) ───────────────────────────────────
+        PROTOCOL_ICC,
+        PROTOCOL_CUSHING,
+        PROTOCOL_EPILEPSIA,
+        PROTOCOL_MEGAESOFAGO,
     ]
 }
 

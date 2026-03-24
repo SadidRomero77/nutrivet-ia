@@ -30,6 +30,22 @@ class IngredienteSchema(BaseModel):
     notas: Optional[str] = Field(
         default=None, description="Nota clínica o de preparación del ingrediente"
     )
+    # ── Especificación de calidad (B-07) ──────────────────────────────────
+    especificacion_compra: Optional[str] = Field(
+        default=None,
+        description=(
+            "Presentación específica a comprar. "
+            "Ej: 'Pollo: fresca o congelada sin aditivos. Evitar versiones marinadas.' "
+            "Ej: 'Sardinas: en agua, sin sal. NO en aceite de girasol ni en salsa de tomate.'"
+        ),
+    )
+    alternativas_equivalentes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ingredientes equivalentes si no se consigue el principal. "
+            "Ej: ['pavo sin piel', 'codorniz'] como alternativa al pollo."
+        ),
+    )
 
     @field_validator("nombre")
     @classmethod
@@ -316,7 +332,9 @@ NO incluyas markdown (```json), NO texto antes o después del JSON.
       "grasa_g": <float — gramos de grasa en esta porción>,
       "fuente": "<animal|vegetal|suplemento>",
       "frecuencia": "<diario|X veces/semana>",
-      "notas": "<nota clínica opcional>"
+      "notas": "<nota clínica opcional>",
+      "especificacion_compra": "<presentación exacta a comprar — marca No, descripción Sí>",
+      "alternativas_equivalentes": ["<ingrediente alternativo 1>", "<alternativa 2>"]
     }
   ],
   "porciones": {
