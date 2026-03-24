@@ -20,6 +20,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.domain.safety.drug_nutrient_interactions import (
+    get_vet_notes_for_conditions,
+    get_owner_alerts_for_conditions,
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BLOQUE 1 — Identidad y límites
@@ -304,10 +309,51 @@ def _get_tier_instructions(user_tier: str) -> str:
         )
 
 
+def _build_drug_awareness_block(conditions: list[str], user_tier: str) -> str:
+    """
+    Construye el bloque de conciencia fármaco-nutriente para el agente conversacional (B-06).
+
+    - Tier VET: incluye notas técnicas completas (nombres de fármacos, referencias).
+    - Otros tiers: solo alertas simplificadas para propietario (sin nombres de fármacos).
+
+    Constitution REGLA 6: nunca mencionar fármacos por nombre al propietario.
+    """
+    if not conditions:
+        return ""
+
+    tier = user_tier.upper()
+
+    if tier == "VET":
+        vet_notes = get_vet_notes_for_conditions(conditions)
+        if not vet_notes:
+            return ""
+        lines = ["\nCONTEXTO FÁRMACO-NUTRIENTE (modo VET — información técnica):\n"]
+        lines.append(
+            "Esta mascota puede estar bajo tratamiento farmacológico. "
+            "Considera estas interacciones al responder consultas nutricionales:\n"
+        )
+        for note in vet_notes:
+            lines.append(f"  ⚕ {note}")
+        return "\n".join(lines)
+    else:
+        owner_alerts = get_owner_alerts_for_conditions(conditions)
+        if not owner_alerts:
+            return ""
+        lines = ["\nALERTAS NUTRICIONALES ACTIVAS PARA ESTA MASCOTA:\n"]
+        lines.append(
+            "Si el propietario pregunta sobre interacciones dieta-medicamento, "
+            "usa estas alertas (sin mencionar nombres de fármacos):\n"
+        )
+        for alert in owner_alerts:
+            lines.append(f"  ℹ {alert}")
+        return "\n".join(lines)
+
+
 def build_conversation_system_prompt(
     pet_profile: dict[str, Any] | None,
     active_plan: dict[str, Any] | None,
     user_tier: str = "FREE",
+    conditions: list[str] | None = None,
 ) -> str:
     """
     Construye el system prompt completo para el agente conversacional.
@@ -318,12 +364,14 @@ def build_conversation_system_prompt(
         pet_profile: PetProfile serializado (todos los 13 campos) o None si sin mascota activa
         active_plan: NutritionPlan serializado con content o None
         user_tier: Tier del usuario para ajuste de tono ("FREE", "BASICO", "PREMIUM", "VET")
+        conditions: Lista de condition_ids activos de la mascota (para alertas fármaco-nutriente)
 
     Returns:
         System prompt completo para streaming al LLM.
     """
     pet_context = _format_pet_context(pet_profile, active_plan)
     tier_instructions = _get_tier_instructions(user_tier)
+    drug_block = _build_drug_awareness_block(conditions or [], user_tier)
 
     parts = [
         _BLOQUE_IDENTIDAD,
@@ -338,6 +386,11 @@ def build_conversation_system_prompt(
         "\n\n" + "━" * 70,
         "\n\n" + tier_instructions,
     ]
+
+    # B-06 — Alertas fármaco-nutriente según tier (vet: técnico, otros: simplificado)
+    if drug_block:
+        parts.append("\n\n" + "━" * 70)
+        parts.append("\n\n" + drug_block)
 
     return "".join(parts)
 

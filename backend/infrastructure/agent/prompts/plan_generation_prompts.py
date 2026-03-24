@@ -28,6 +28,11 @@ from backend.infrastructure.agent.prompts.condition_protocols import (
     get_most_restrictive_protein_range,
 )
 from backend.infrastructure.agent.prompts.json_schemas import JSON_FORMAT_INSTRUCTION
+from backend.domain.nutrition.clinical_supplements import get_all_supplements_for_conditions
+from backend.domain.safety.drug_nutrient_interactions import (
+    get_vet_notes_for_conditions,
+    get_owner_alerts_for_conditions,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -460,6 +465,72 @@ def _build_condition_block(protocols: list[ConditionProtocol], species: str) -> 
     return "\n".join(lines)
 
 
+def _build_supplements_block(conditions: list[str], species: str) -> str:
+    """
+    Construye el bloque de suplementos terapéuticos con dosis diferenciadas (B-01).
+
+    Solo incluye suplementos cuya dosis aplica a la especie indicada.
+    Las dosis son OBLIGATORIAS — el LLM no puede modificarlas.
+    """
+    all_supplements = get_all_supplements_for_conditions(conditions)
+    if not all_supplements:
+        return ""
+
+    is_perro = species.lower() in ("perro", "dog")
+    lines = ["\nSUPLEMENTOS TERAPÉUTICOS OBLIGATORIOS (dosis validadas NRC/ACVIM):\n"]
+    lines.append("INCLUIR en la sección 'suplementos' del plan. Dosis EXACTAS — no modificar.\n")
+
+    for cond_id, supplements in all_supplements.items():
+        cond_supplements = [
+            (nombre, dose)
+            for nombre, dose in supplements.items()
+            if (is_perro and dose.dosis_perro != "N/A")
+            or (not is_perro and dose.dosis_gato != "N/A")
+        ]
+        if not cond_supplements:
+            continue
+        lines.append(f"  [{cond_id.upper()}]")
+        for nombre, dose in cond_supplements:
+            dosis = dose.dosis_perro if is_perro else dose.dosis_gato
+            lines.append(f"    • {nombre}: {dosis} — {dose.frecuencia}")
+            lines.append(f"      Forma: {dose.forma}")
+            if dose.contraindicaciones:
+                lines.append(
+                    f"      ⚠ CONTRAINDICADO si: {', '.join(dose.contraindicaciones)}"
+                )
+
+    return "\n".join(lines)
+
+
+def _build_drug_nutrient_block(conditions: list[str]) -> str:
+    """
+    Construye el bloque de alertas fármaco-nutriente para el vet revisor (B-06).
+
+    El LLM debe incluir las notas técnicas en notas_clinicas del plan.
+    Constitution REGLA 6: las alertas al propietario NO mencionan fármacos por nombre.
+    """
+    vet_notes = get_vet_notes_for_conditions(conditions)
+    owner_alerts = get_owner_alerts_for_conditions(conditions)
+
+    if not vet_notes and not owner_alerts:
+        return ""
+
+    lines = ["\nALERTAS FÁRMACO-NUTRIENTE — INCLUIR EN notas_clinicas DEL PLAN:\n"]
+
+    if vet_notes:
+        lines.append("NOTAS TÉCNICAS PARA VET REVISOR:")
+        for note in vet_notes:
+            lines.append(f"  ⚕ {note}")
+        lines.append("")
+
+    if owner_alerts:
+        lines.append("ALERTAS SIMPLIFICADAS PARA PROPIETARIO (sin nombres de fármacos):")
+        for alert in owner_alerts:
+            lines.append(f"  ℹ {alert}")
+
+    return "\n".join(lines)
+
+
 def build_plan_system_prompt(
     conditions: list[str],
     species: str,
@@ -487,6 +558,8 @@ def build_plan_system_prompt(
         modality_block = _BLOQUE_MODALIDAD_NATURAL
 
     condition_block = _build_condition_block(protocols, species)
+    supplements_block = _build_supplements_block(conditions, species)
+    drug_nutrient_block = _build_drug_nutrient_block(conditions)
 
     parts = [
         _BLOQUE_IDENTIDAD,
@@ -509,6 +582,16 @@ def build_plan_system_prompt(
     if "diabético" in [c.lower() for c in conditions]:
         parts.append("\n\n" + "=" * 70)
         parts.append("\n" + _BLOQUE_IG_DIABETICO)
+
+    # B-01 — Suplementos terapéuticos (dosis diferenciadas por condición)
+    if supplements_block:
+        parts.append("\n\n" + "=" * 70)
+        parts.append("\n" + supplements_block)
+
+    # B-06 — Alertas fármaco-nutriente (vet notes + owner alerts)
+    if drug_nutrient_block:
+        parts.append("\n\n" + "=" * 70)
+        parts.append("\n" + drug_nutrient_block)
 
     parts.append("\n\n" + "=" * 70)
     parts.append("\n" + _BLOQUE_PLAN_CLINICO)
