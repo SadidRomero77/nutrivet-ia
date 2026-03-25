@@ -151,26 +151,59 @@ class ExportPlanUseCase:
 
     @staticmethod
     def _build_plan_data(plan) -> dict:
-        """Construye el dict de datos para el PDFGenerator desde el NutritionPlan."""
+        """
+        Construye el dict de datos para el PDFGenerator desde el NutritionPlan.
+
+        Mapea los campos del JSON generado por el LLM (PlanOutputSchema) a las
+        variables que consume la plantilla Jinja2 con las 10 secciones clínicas.
+        """
         content = plan.content or {}
+        perfil = content.get("perfil_nutricional", {})
+        transicion = content.get("transicion_dieta", {})
+
         return {
+            # Metadata
             "plan_id": str(plan.plan_id),
-            "pet_id": str(plan.pet_id),
             "rer_kcal": plan.rer_kcal,
             "der_kcal": plan.der_kcal,
             "modality": plan.modality.value,
             "plan_type": plan.plan_type.value,
             "llm_model_used": plan.llm_model_used,
             "approved_by_vet_name": content.get("approved_by_vet_name"),
-            "seccion_1_perfil": content.get("seccion_1_perfil", {}),
-            "seccion_2_calorias": content.get("seccion_2_calorias", {
-                "rer_kcal": plan.rer_kcal,
-                "der_kcal": plan.der_kcal,
-                "fase": plan.weight_phase.value,
-            }),
-            "seccion_3_ingredientes": content.get("seccion_3_ingredientes", []),
-            "seccion_4_transicion": content.get("seccion_4_transicion"),
-            "seccion_5_sustitutos": content.get("seccion_5_sustitutos", []),
-            "has_transition_protocol": content.get("has_transition_protocol", False),
+            # Sección 1 — Perfil nutricional (calculado NRC)
+            "rer_kcal_display": plan.rer_kcal,
+            "der_kcal_display": plan.der_kcal,
+            "weight_phase": plan.weight_phase.value if hasattr(plan, "weight_phase") else "",
+            "proteina_pct_ms": perfil.get("proteina_pct_ms"),
+            "grasa_pct_ms": perfil.get("grasa_pct_ms"),
+            "racion_total_g_dia": (
+                perfil.get("racion_total_g_dia")
+                or content.get("porciones", {}).get("total_g_dia")
+            ),
+            "relacion_ca_p": perfil.get("relacion_ca_p"),
+            "omega3_mg_dia": perfil.get("omega3_mg_dia"),
+            # Sección 2 — Objetivos clínicos
+            "objetivos_clinicos": content.get("objetivos_clinicos", []),
+            # Sección 3 — Ingredientes prohibidos
+            "ingredientes_prohibidos": content.get("ingredientes_prohibidos", []),
+            # Sección 4 — Ingredientes y porciones
+            "ingredientes": content.get("ingredientes", []),
+            "porciones": content.get("porciones", {}),
+            # Sección 5 — Suplementos
+            "suplementos": content.get("suplementos", []),
+            # Sección 6 — Instrucciones de preparación
+            "instrucciones_preparacion": content.get("instrucciones_preparacion", {}),
+            # Sección 7 — Snacks saludables
+            "snacks_saludables": content.get("snacks_saludables", []),
+            # Sección 8 — Protocolo digestivo
+            "protocolo_digestivo": content.get("protocolo_digestivo", []),
+            # Sección 9 — Transición
+            "transicion_dieta": transicion,
+            "has_transicion": bool(transicion.get("requiere_transicion", False)),
+            # Sección 10 — Alertas
+            "alertas_propietario": content.get("alertas_propietario", []),
+            "alertas_barf": content.get("alertas_barf", []),
+            "notas_clinicas": content.get("notas_clinicas", []),
+            # Disclaimer obligatorio (REGLA 8)
             "disclaimer": _PDF_DISCLAIMER,
         }
