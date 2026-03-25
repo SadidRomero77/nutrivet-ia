@@ -29,6 +29,10 @@ const _medicalConditions = [
   'gastritis',
   'cistitis/enfermedad_urinaria',
   'sobrepeso/obesidad',
+  'insuficiencia_cardiaca',
+  'hiperadrenocorticismo_cushing',
+  'epilepsia',
+  'megaesofago',
 ];
 
 const _allergens = [

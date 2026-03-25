@@ -249,7 +249,12 @@ class _ReviewContentState extends ConsumerState<_ReviewContent> {
                   ),
                 ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+
+              // Trazabilidad del agente (C4 — visible solo para vet)
+              _AgentTraceSection(plan: plan),
+
+              const SizedBox(height: 8),
 
               // Estado
               if (!isPending)
@@ -343,6 +348,155 @@ class _Section extends StatelessWidget {
             child,
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Sección expandible con la trazabilidad del agente IA — visible solo para vet.
+///
+/// Muestra modelo LLM, RER/DER calculados, modalidad y restricciones aplicadas.
+/// Permite al veterinario verificar que el agente tomó las decisiones correctas.
+class _AgentTraceSection extends StatefulWidget {
+  const _AgentTraceSection({required this.plan});
+
+  final PlanDetail plan;
+
+  @override
+  State<_AgentTraceSection> createState() => _AgentTraceSectionState();
+}
+
+class _AgentTraceSectionState extends State<_AgentTraceSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final plan = widget.plan;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(
+              Icons.account_tree_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            title: Text(
+              'Trazabilidad del agente IA',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(
+              'Modelo: ${plan.llmModelUsed}',
+              style: theme.textTheme.bodySmall,
+            ),
+            trailing: Icon(
+              _expanded ? Icons.expand_less : Icons.expand_more,
+            ),
+            onTap: () => setState(() => _expanded = !_expanded),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(),
+                  _TraceRow(
+                    icon: Icons.smart_toy_outlined,
+                    label: 'Modelo LLM',
+                    value: plan.llmModelUsed,
+                  ),
+                  _TraceRow(
+                    icon: Icons.local_fire_department_outlined,
+                    label: 'RER calculado',
+                    value:
+                        '${plan.perfilNutricional.rerKcal.toStringAsFixed(1)} kcal/día (Python determinista)',
+                  ),
+                  _TraceRow(
+                    icon: Icons.bolt_outlined,
+                    label: 'DER calculado',
+                    value:
+                        '${plan.perfilNutricional.derKcal.toStringAsFixed(1)} kcal/día',
+                  ),
+                  _TraceRow(
+                    icon: Icons.sync_alt,
+                    label: 'Fase de peso',
+                    value: plan.perfilNutricional.weightPhase,
+                  ),
+                  _TraceRow(
+                    icon: Icons.restaurant_menu_outlined,
+                    label: 'Modalidad',
+                    value: plan.modality,
+                  ),
+                  if (plan.notasClincias.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Restricciones médicas aplicadas (hard-coded):',
+                      style: theme.textTheme.labelMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    ...plan.notasClincias.map(
+                      (n) => Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.check,
+                                size: 14, color: Colors.green),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text(n, style: theme.textTheme.bodySmall)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TraceRow extends StatelessWidget {
+  const _TraceRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: theme.textTheme.bodySmall),
+          ),
+        ],
       ),
     );
   }

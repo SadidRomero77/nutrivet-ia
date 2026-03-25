@@ -1042,27 +1042,44 @@ class _StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (color, label, icon) = switch (status) {
-      'ACTIVE' => (Colors.green, 'Activo — listo para usar', Icons.check_circle),
-      'PENDING_VET' =>
-        (Colors.orange, 'Pendiente revisión veterinaria', Icons.pending),
-      'UNDER_REVIEW' => (Colors.blue, 'En revisión', Icons.rate_review),
-      'ARCHIVED' => (Colors.grey, 'Archivado', Icons.archive),
-      _ => (Colors.grey, status, Icons.info),
+    final (color, label, subtitle, icon) = switch (status) {
+      'ACTIVE' => (Colors.green, 'Activo — listo para usar', null, Icons.check_circle),
+      'PENDING_VET' => (
+          Colors.orange,
+          'Pendiente revisión veterinaria',
+          'El veterinario revisará el plan antes de activarlo. '
+              'Podrás exportarlo una vez que sea aprobado.',
+          Icons.pending,
+        ),
+      'UNDER_REVIEW' => (Colors.blue, 'En revisión', null, Icons.rate_review),
+      'ARCHIVED' => (Colors.grey, 'Archivado', null, Icons.archive),
+      _ => (Colors.grey, status, null, Icons.info),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 8),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: TextStyle(color: color.withOpacity(0.8), fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

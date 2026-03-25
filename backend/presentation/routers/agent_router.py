@@ -30,7 +30,6 @@ from backend.infrastructure.agent.subgraphs.consultation import (
     run_consultation_subgraph,
     run_consultation_subgraph_streaming,
 )
-from backend.infrastructure.agent.subgraphs.consultation_stub import consultation_stub
 from backend.infrastructure.db.agent_quota_repository import PostgreSQLAgentQuotaRepository
 from backend.infrastructure.db.conversation_repository import PostgreSQLConversationRepository
 from backend.infrastructure.agent.subgraphs.plan_generation import (
@@ -46,7 +45,6 @@ from backend.infrastructure.agent.subgraphs.plan_generation import (
     nodo_10_persist_and_notify,
 )
 from backend.infrastructure.agent.subgraphs.scanner import run_scanner_subgraph
-from backend.infrastructure.agent.subgraphs.scanner_stub import scanner_stub
 from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTraceRepository
 from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
 from backend.infrastructure.db.plan_repository import PostgreSQLPlanRepository
@@ -98,6 +96,29 @@ def _build_load_context_fn(session):
     return _load_context
 
 
+def _build_consultation_fn(session):
+    """Construye consultation subgraph con repositorios inyectados."""
+    quota_repo = PostgreSQLAgentQuotaRepository(session)
+    conversation_repo = PostgreSQLConversationRepository(session)
+
+    async def _consultation(state: NutriVetState) -> NutriVetState:
+        return await run_consultation_subgraph(
+            state,
+            quota_repo=quota_repo,
+            conversation_repo=conversation_repo,
+        )
+
+    return _consultation
+
+
+def _build_scanner_fn(_session):
+    """Construye scanner subgraph (sin repositorios adicionales — lee de state)."""
+    async def _scanner(state: NutriVetState) -> NutriVetState:
+        return await run_scanner_subgraph(state)
+
+    return _scanner
+
+
 @router.post(
     "/v1/agent/process",
     response_model=AgentResponse,
@@ -140,8 +161,8 @@ async def process_message(
         load_context_fn=load_context_fn,
         intent_classifier_fn=intent_classifier,
         plan_generation_fn=plan_generation_fn,
-        consultation_fn=consultation_stub,
-        scanner_fn=scanner_stub,
+        consultation_fn=_build_consultation_fn(session),
+        scanner_fn=_build_scanner_fn(session),
     )
     orchestrator = get_orchestrator()
 
