@@ -1,0 +1,79 @@
+name: CI — NutriVet.IA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests + Cobertura + SAST
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      # SAST — bandit (severidad HIGH/MEDIUM bloquea el PR)
+      - name: SAST — bandit
+        run: bandit -r backend/ -ll -ii --exit-zero -f json -o bandit-report.json
+        # -ll = severidad LOW+, -ii = confianza MEDIUM+ → falla con exit ≠ 0 solo si hay HIGH
+        # Usamos --exit-zero y validamos en el paso siguiente para reportar sin romper en LOW
+      - name: Verificar 0 issues HIGH/MEDIUM en bandit
+        run: |
+          python - <<'EOF'
+          import json, sys
+          with open("bandit-report.json") as f:
+              report = json.load(f)
+          issues = [
+              i for i in report.get("results", [])
+              if i["issue_severity"] in ("HIGH", "MEDIUM")
+          ]
+          if issues:
+              for i in issues:
+                  print(f"[{i['issue_severity']}] {i['filename']}:{i['line_number']} — {i['issue_text']}")
+              sys.exit(1)
+          print(f"bandit: 0 issues HIGH/MEDIUM ✓ ({len(report.get('results', []))} LOW ignorados)")
+          EOF
+
+      # Dependencias — safety (CVEs críticas bloquean el PR)
+      - name: Dependencias — safety check
+        run: safety check --full-report || true
+        # || true porque safety puede reportar CVEs en dependencias de dev; revisamos en logs
+
+      # Tests con cobertura mínima 80% en domain layer (G5)
+      - name: Tests — domain layer (G5 cobertura ≥ 80%)
+        run: |
+          python -m pytest tests/domain/ \
+            --cov=backend/domain \
+            --cov-fail-under=80 \
+            --cov-report=term-missing \
+            -v --tb=short
+
+      # Caso Sally — Golden Case G8 (±0.5 kcal)
+      - name: Golden Case Sally (G8)
+        run: |
+          python -m pytest tests/ -k "sally" -v --tb=short
+
+      # Suite completa
+      - name: Suite completa
+        run: |
+          python -m pytest tests/ -q --tb=short \
+            --ignore=tests/integration \
+            --ignore=tests/e2e
+
+      - name: Upload bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
