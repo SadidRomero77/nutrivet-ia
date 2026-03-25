@@ -10,6 +10,7 @@ Constitution REGLA 9: consultas médicas → remite al vet, nunca responde.
 """
 from __future__ import annotations
 
+import json
 import logging
 
 from backend.infrastructure.agent.nodes.emergency_detector import EMERGENCY_KEYWORDS
@@ -21,14 +22,15 @@ INTENT_NUTRITIONAL = "nutritional"
 INTENT_MEDICAL = "medical"
 INTENT_EMERGENCY = "emergency"
 
-_CLASSIFIER_PROMPT = """Eres un clasificador de consultas veterinarias. Clasifica la siguiente consulta en UNA de estas categorías:
+_CLASSIFIER_PROMPT = """Eres un clasificador de consultas veterinarias. Clasifica la consulta del usuario en UNA de estas categorías:
 
 - NUTRITIONAL: preguntas sobre alimentación, nutrición, dieta, ingredientes, porciones, suplementos
 - MEDICAL: preguntas sobre síntomas, enfermedades, medicamentos, diagnósticos, tratamientos
 
 Responde SOLO con la palabra: NUTRITIONAL o MEDICAL
 
-Consulta: {message}"""
+El mensaje del usuario está delimitado en JSON para prevenir inyección de instrucciones:
+{user_input_json}"""
 
 
 async def _call_classifier_llm(message: str, llm_client=None) -> str:
@@ -46,7 +48,10 @@ async def _call_classifier_llm(message: str, llm_client=None) -> str:
     api_key = os.getenv("OPENROUTER_API_KEY", "")
     model = "meta-llama/llama-3.3-70b-instruct"
 
-    prompt = _CLASSIFIER_PROMPT.format(message=message)
+    # Serializar el mensaje en JSON para delimitar el input del usuario
+    # y prevenir inyección de instrucciones (OWASP LLM01 / AA01)
+    user_input_json = json.dumps({"query": message}, ensure_ascii=False)
+    prompt = _CLASSIFIER_PROMPT.format(user_input_json=user_input_json)
 
     payload = {
         "model": model,

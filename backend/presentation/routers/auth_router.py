@@ -141,7 +141,9 @@ async def login(
     status_code=status.HTTP_200_OK,
     summary="Rotar refresh token",
 )
+@_limiter.limit("5/minute")  # Previene rotation attacks de refresh tokens
 async def refresh(
+    request: Request,
     body: RefreshRequest,
     session: AsyncSession = Depends(get_db_session),
     jwt_service: JWTService = Depends(get_jwt_service),
@@ -171,7 +173,9 @@ async def refresh(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Cerrar sesión",
 )
+@_limiter.limit("10/minute")  # Previene logout DoS masivo
 async def logout(
+    request: Request,
     body: LogoutRequest,
     session: AsyncSession = Depends(get_db_session),
     jwt_service: JWTService = Depends(get_jwt_service),

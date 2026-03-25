@@ -85,19 +85,22 @@ async def health() -> dict:
     from fastapi.responses import JSONResponse
     from backend.infrastructure.db.session import engine
 
+    import logging as _logging
+    _hc_logger = _logging.getLogger("nutrivet.health")
+
     db_ok = False
-    db_error: str | None = None
     try:
         async with engine.connect() as conn:
             await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
         db_ok = True
     except Exception as exc:
-        db_error = type(exc).__name__
+        # Log interno con detalle — nunca exponer al exterior (OWASP A05)
+        _hc_logger.error("DB health check failed: %s", type(exc).__name__)
 
     payload = {
         "status": "ok" if db_ok else "degraded",
         "service": "nutrivet-ia",
-        "db": "connected" if db_ok else f"error: {db_error}",
+        "db": "connected" if db_ok else "unavailable",
     }
     http_status = 200 if db_ok else 503
     return JSONResponse(content=payload, status_code=http_status)

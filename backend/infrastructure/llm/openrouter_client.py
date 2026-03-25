@@ -81,6 +81,7 @@ class OpenRouterClient:
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.3,
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         """
         Genera texto con el modelo dado. Retry × 2 con backoff, fallback si falla.
@@ -102,7 +103,7 @@ class OpenRouterClient:
 
         for attempt in range(3):  # 3 intentos: 0, 1, 2
             try:
-                return await self._call(current_model, system_prompt, user_prompt, temperature)
+                return await self._call(current_model, system_prompt, user_prompt, temperature, max_tokens)
             except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
                 last_error = e
                 if attempt < len(_RETRY_DELAYS):
@@ -115,7 +116,7 @@ class OpenRouterClient:
                         # Reiniciar contador con fallback
                         try:
                             return await self._call(
-                                current_model, system_prompt, user_prompt, temperature
+                                current_model, system_prompt, user_prompt, temperature, max_tokens
                             )
                         except Exception as fe:
                             last_error = fe
@@ -132,6 +133,7 @@ class OpenRouterClient:
         system_prompt: str,
         user_prompt: str,
         temperature: float,
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         """Realiza una llamada HTTP al API de OpenRouter."""
         headers = {
@@ -147,6 +149,7 @@ class OpenRouterClient:
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": temperature,
+            "max_tokens": max_tokens,  # Límite explícito — previene costos descontrolados (OWASP LLM10)
         }
 
         start = time.monotonic()

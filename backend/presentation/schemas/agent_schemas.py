@@ -5,6 +5,7 @@ Constitution REGLA 8: el disclaimer está presente en cada respuesta del agente.
 """
 from __future__ import annotations
 
+from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -14,14 +15,22 @@ _DISCLAIMER = (
 )
 
 
+class PlanModality(str, Enum):
+    """Modalidades de plan permitidas — validadas antes de llegar al prompt."""
+    natural = "natural"
+    barf = "barf"
+    concentrado = "concentrado"
+    mixto = "mixto"
+
+
 class AgentRequest(BaseModel):
     """Request al endpoint del agente."""
 
     pet_id: str = Field(..., description="UUID de la mascota objetivo")
     message: str = Field(..., min_length=1, max_length=2000, description="Mensaje del usuario")
-    modality: Optional[str] = Field(
-        default="natural",
-        description="Modalidad del plan: natural | concentrado | mixto",
+    modality: Optional[PlanModality] = Field(
+        default=PlanModality.natural,
+        description="Modalidad del plan: natural | barf | concentrado | mixto",
     )
 
 

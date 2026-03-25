@@ -13,7 +13,7 @@ import logging
 import uuid as _uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -60,6 +60,10 @@ router = APIRouter(tags=["agent"])
 
 # Rate limiter compartido (instancia configurada en main.py via app.state.limiter)
 _limiter = Limiter(key_func=get_remote_address)
+
+# Restricciones para upload de imágenes en /v1/agent/scan
+_ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+_MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 def _build_plan_generation_fn(session):
@@ -196,8 +200,21 @@ async def scan_label(
     if not (is_owner or is_assigned_vet):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado.")
 
+    # Validar MIME type antes de leer bytes (content_type es user-controlled)
+    mime_type = image.content_type or ""
+    if mime_type not in _ALLOWED_IMAGE_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Formato no soportado. Usa JPEG, PNG, WebP o GIF.",
+        )
+
+    # Leer con límite de tamaño para prevenir DoS (OWASP A05 / LLM10)
     image_bytes = await image.read()
-    mime_type = image.content_type or "image/jpeg"
+    if len(image_bytes) > _MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Imagen demasiado grande. Máximo 5 MB.",
+        )
 
     initial_state = NutriVetState(
         user_id=str(current_user.user_id),
@@ -327,7 +344,7 @@ async def chat(
 )
 async def get_conversation_history(
     pet_id: str,
-    limit: int = 30,
+    limit: int = Query(30, ge=1, le=100),
     current_user=Depends(get_current_user),
     session=Depends(get_db_session),
 ) -> list[dict[str, Any]]:
@@ -338,11 +355,27 @@ async def get_conversation_history(
 
     El cliente (Flutter) muestra estos mensajes al abrir la pantalla de chat
     para que el usuario vea el historial de la sesión anterior.
+
+    RBAC: solo el owner de la mascota o el vet asignado puede acceder.
     """
     try:
-        _uuid.UUID(pet_id)
+        pet_uuid = _uuid.UUID(pet_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="pet_id inválido.")
+
+    # Verificar ownership — Constitution REGLA 6 (aislamiento de datos)
+    pet_repo = PostgreSQLPetRepository(session)
+    pet = await pet_repo.find_by_id(pet_uuid)
+    if pet is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mascota no encontrada.")
+    is_owner = pet.owner_id == current_user.user_id
+    is_vet = (
+        current_user.role.value == "vet"
+        and pet.vet_id is not None
+        and pet.vet_id == current_user.user_id
+    )
+    if not (is_owner or is_vet):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado.")
 
     conversation_repo = PostgreSQLConversationRepository(session)
     return await conversation_repo.list_for_display(pet_id=pet_id, limit=limit)

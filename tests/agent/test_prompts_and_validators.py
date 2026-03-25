@@ -163,17 +163,21 @@ def pet_gato_condiciones() -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestConditionProtocols:
-    def test_all_13_condiciones_presentes(self) -> None:
-        """Deben existir exactamente 13 protocolos en ALL_PROTOCOLS."""
-        assert len(ALL_PROTOCOLS) == 13
+    def test_all_17_condiciones_presentes(self) -> None:
+        """Deben existir exactamente 17 protocolos en ALL_PROTOCOLS (Sprint 4: +4 nuevas)."""
+        assert len(ALL_PROTOCOLS) == 17
 
     def test_todos_los_condition_ids_conocidos(self) -> None:
-        """Los 13 IDs de condición deben coincidir con los definidos en CLAUDE.md."""
+        """Los 17 IDs de condición deben coincidir (13 base + 4 de Sprint 4: A-04)."""
         expected_ids = {
+            # 13 originales
             "diabético", "hipotiroideo", "cancerígeno", "articular", "renal",
             "hepático/hiperlipidemia", "pancreático", "neurodegenerativo",
             "bucal/periodontal", "piel/dermatitis", "gastritis",
             "cistitis/enfermedad_urinaria", "sobrepeso/obesidad",
+            # 4 nuevas (Sprint 4 — A-04)
+            "insuficiencia_cardiaca", "hiperadrenocorticismo_cushing",
+            "epilepsia", "megaesofago",
         }
         assert set(ALL_PROTOCOLS.keys()) == expected_ids
 
