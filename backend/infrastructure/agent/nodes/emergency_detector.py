@@ -11,20 +11,35 @@ from __future__ import annotations
 from backend.infrastructure.agent.state import NutriVetState
 
 # Keywords de emergencia — hard-coded, sin LLM (Constitution REGLA 9)
+# NUNCA modificar sin validación veterinaria de Lady Carolina Castañeda (MV).
 EMERGENCY_KEYWORDS: frozenset[str] = frozenset({
+    # Neurológico
     "convulsión", "convulsiones", "convulsionando",
     "desmayo", "desmayado", "desmayándose",
+    "pérdida de conciencia", "inconsciente", "no despierta",
+    "crisis epiléptica", "crisis", "ataque",
+    "parálisis", "no puede caminar",
+    # Respiratorio — crítico
     "no respira", "sin respiración", "respiración dificultosa",
-    "sangrado", "hemorragia", "sangre",
-    "veneno", "envenenado", "intoxicado", "intoxicación",
-    "atropellado", "accidente", "trauma",
-    "no come hace días", "no bebe hace días",
+    "dificultad respiratoria", "no puede respirar",
+    "ahogando", "asfixia", "asfixiando",
+    # Cardiovascular / circulatorio
+    "sangrado", "hemorragia", "vómito con sangre", "diarrea con sangre",
     "colapso", "colapsó", "colapsando",
-    "urgente", "emergencia", "muriéndose",
-    "inconsciente", "no despierta",
-    "vómito con sangre", "diarrea con sangre",
-    "no puede caminar", "parálisis",
-    "crisis", "ataque",
+    # Intoxicación / envenenamiento
+    "veneno", "envenenado", "envenenó", "intoxicado", "intoxicación",
+    "ingirió chocolate", "comió chocolate",
+    "ingirió uva", "comió uva", "ingirió uvas", "comió uvas",
+    "ingirió cebolla", "comió cebolla",
+    "ingirió ajo", "comió ajo",
+    "ingirió xilitol", "ingirió plantas tóxicas",
+    "se envenenó", "posible intoxicación",
+    # Trauma
+    "atropellado", "accidente", "trauma",
+    # Estado general grave
+    "muriéndose", "urgente", "emergencia",
+    "no come hace días", "no bebe hace días",
+    "sangre",
 })
 
 
