@@ -259,6 +259,17 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
 
+                if (!isVet)
+                  _DrawerItem(
+                    icon: Icons.workspace_premium_outlined,
+                    title: 'Suscripción',
+                    subtitle: 'Planes y precios',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/subscription');
+                    },
+                  ),
+
                 if (!isVet) ...[
                   _DrawerItem(
                     icon: Icons.qr_code_scanner_outlined,

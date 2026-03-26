@@ -64,8 +64,81 @@ from backend.presentation.schemas.plan_schemas import (
     TransitionSection,
 )
 
+from backend.infrastructure.db.device_token_repository import PostgreSQLDeviceTokenRepository
+from backend.infrastructure.push.fcm_client import PushNotification, send_push_to_tokens
+
 router = APIRouter(tags=["plans"])
 vet_router = APIRouter(tags=["vet"])
+
+
+# ---------------------------------------------------------------------------
+# Helper push notifications — fire-and-forget, nunca bloquea la respuesta
+# ---------------------------------------------------------------------------
+
+async def _push_to_user(user_id: uuid.UUID, notification: PushNotification) -> None:
+    """Envía push notification a todos los devices de un usuario (fire-and-forget)."""
+    try:
+        async with AsyncSessionLocal() as session:
+            token_repo = PostgreSQLDeviceTokenRepository(session)
+            tokens = await token_repo.get_tokens_for_user(user_id)
+            if tokens:
+                await send_push_to_tokens(tokens=tokens, notification=notification)
+    except Exception:
+        logger.exception("Error enviando push notification a user=%s", user_id)
+
+
+async def _notify_vet_if_pending(session: AsyncSession, job_id: uuid.UUID) -> None:
+    """
+    Si el plan recién creado está en PENDING_VET, notifica al vet del pet.
+
+    Busca el vet vinculado al pet via ClaimCode para enviarle la push.
+    """
+    try:
+        from sqlalchemy import select as _select
+        from backend.infrastructure.db.models import (
+            PlanJobModel, NutritionPlanModel, ClaimCodeModel,
+        )
+        from backend.infrastructure.db.device_token_repository import PostgreSQLDeviceTokenRepository
+
+        # Obtener plan del job
+        job_q = await session.execute(
+            _select(PlanJobModel).where(PlanJobModel.id == job_id)
+        )
+        job = job_q.scalar_one_or_none()
+        if job is None or job.plan_id is None:
+            return
+
+        plan_q = await session.execute(
+            _select(NutritionPlanModel).where(NutritionPlanModel.id == job.plan_id)
+        )
+        plan = plan_q.scalar_one_or_none()
+        if plan is None or plan.status != "pending_vet":
+            return
+
+        # Buscar vet vinculado al pet via ClaimCode
+        claim_q = await session.execute(
+            _select(ClaimCodeModel).where(
+                ClaimCodeModel.pet_id == plan.pet_id,
+                ClaimCodeModel.used.is_(True),
+            ).order_by(ClaimCodeModel.created_at.desc()).limit(1)
+        )
+        claim = claim_q.scalar_one_or_none()
+        if claim is None or claim.vet_id is None:
+            return
+
+        token_repo = PostgreSQLDeviceTokenRepository(session)
+        tokens = await token_repo.get_tokens_for_user(claim.vet_id)
+        if tokens:
+            await send_push_to_tokens(
+                tokens=tokens,
+                notification=PushNotification(
+                    title="Nuevo plan para revisar",
+                    body="Un propietario generó un plan con condición médica. Requiere tu aprobación.",
+                    data={"event": "plan_pending_vet", "plan_id": str(plan.id)},
+                ),
+            )
+    except Exception:
+        logger.exception("Error en _notify_vet_if_pending job=%s", job_id)
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +167,9 @@ async def _run_worker_background(job_id: uuid.UUID, user_tier: UserTier) -> None
             await worker.execute(job_id=job_id, user_tier=user_tier)
             await session.commit()
             logger.info("plan_generation_worker completado job=%s", job_id)
+
+            # Push notification: notificar al vet si el plan quedó PENDING_VET
+            await _notify_vet_if_pending(session=session, job_id=job_id)
         except Exception:
             await session.rollback()
             logger.exception("plan_generation_worker falló job=%s", job_id)
@@ -370,35 +446,72 @@ async def get_plan(
 async def approve_plan(
     plan_id: uuid.UUID,
     body: PlanApproveRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(require_role("vet")),
 ) -> dict:
-    """Vet aprueba plan PENDING_VET → ACTIVE."""
+    """Vet aprueba plan PENDING_VET → ACTIVE. Notifica al owner por push."""
+    # Obtener owner_id antes de aprobar para la notificación
+    plan_repo = PostgreSQLPlanRepository(session)
+    plan_obj = await plan_repo.find_by_id(plan_id)
+    owner_id = plan_obj.owner_id if plan_obj else None
+
     try:
         uc = _hitl_use_case(session)
-        return await uc.approve(
+        result = await uc.approve(
             plan_id=plan_id, vet_id=user.user_id, review_date=body.review_date
         )
     except DomainError as e:
         code = status.HTTP_422_UNPROCESSABLE_ENTITY if "review_date" in str(e).lower() or "revisión" in str(e).lower() else status.HTTP_403_FORBIDDEN
         raise HTTPException(status_code=code, detail=str(e)) from e
 
+    if owner_id:
+        background_tasks.add_task(
+            _push_to_user,
+            owner_id,
+            PushNotification(
+                title="¡Tu plan nutricional está aprobado!",
+                body="El veterinario revisó y aprobó el plan. Ya puedes verlo y exportarlo.",
+                data={"event": "plan_approved", "plan_id": str(plan_id)},
+            ),
+        )
+
+    return result
+
 
 @router.patch("/v1/plans/{plan_id}/return", response_model=dict)
 async def return_plan(
     plan_id: uuid.UUID,
     body: PlanReturnRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(require_role("vet")),
 ) -> dict:
-    """Vet devuelve plan al owner con comentario obligatorio."""
+    """Vet devuelve plan al owner con comentario obligatorio. Notifica al owner por push."""
+    plan_repo = PostgreSQLPlanRepository(session)
+    plan_obj = await plan_repo.find_by_id(plan_id)
+    owner_id = plan_obj.owner_id if plan_obj else None
+
     try:
         uc = _hitl_use_case(session)
-        return await uc.return_to_owner(
+        result = await uc.return_to_owner(
             plan_id=plan_id, vet_id=user.user_id, comment=body.comment
         )
     except DomainError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+    if owner_id:
+        background_tasks.add_task(
+            _push_to_user,
+            owner_id,
+            PushNotification(
+                title="El vet revisó tu plan",
+                body="Tu plan tiene un comentario del veterinario. Revísalo para hacer ajustes.",
+                data={"event": "plan_returned", "plan_id": str(plan_id)},
+            ),
+        )
+
+    return result
 
 
 @router.get("/v1/plans/{plan_id}/substitutes", response_model=list[str])

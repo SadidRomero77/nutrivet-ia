@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../../core/utils/jwt_utils.dart';
 
@@ -81,6 +82,8 @@ class AuthRepository {
       refreshToken: tokens.refreshToken,
       role: role,
     );
+    // Registrar token FCM para push notifications (fire-and-forget)
+    PushNotificationService.instance.registerCurrentToken().ignore();
     return role;
   }
 
@@ -128,6 +131,8 @@ class AuthRepository {
 
   /// Cierra sesión y elimina tokens locales.
   Future<void> logout() async {
+    // Eliminar token FCM del backend antes del logout
+    await PushNotificationService.instance.unregisterCurrentToken();
     try {
       await dio.post('/v1/auth/logout');
     } catch (_) {

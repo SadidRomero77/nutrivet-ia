@@ -374,6 +374,79 @@ class ConversationModel(Base):
     # Sin updated_at — historial es append-only (REGLA 6)
 
 
+class DeviceTokenModel(Base):
+    """
+    Tabla device_tokens — tokens FCM para push notifications.
+
+    Cada usuario puede tener múltiples tokens (dispositivos).
+    El token se registra al hacer login y se elimina al logout.
+    """
+
+    __tablename__ = "device_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
+    platform: Mapped[str] = mapped_column(
+        String(10), nullable=False
+    )  # "android" | "ios"
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class PaymentModel(Base):
+    """
+    Tabla payments — registro de pagos vía PayU Colombia.
+
+    Cada pago corresponde a la activación/renovación de un tier de suscripción.
+    Estado: pending → approved | declined | error.
+    Los pagos son append-only — nunca se modifica un registro existente.
+    """
+
+    __tablename__ = "payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    reference_code: Mapped[str] = mapped_column(
+        String(100), unique=True, nullable=False, index=True
+    )
+    tier: Mapped[str] = mapped_column(String(20), nullable=False)  # basico | premium | vet
+    amount_cop: Mapped[float] = mapped_column(Float, nullable=False)
+    currency: Mapped[str] = mapped_column(String(5), nullable=False, default="COP")
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending"
+    )  # pending | approved | declined | error
+    payu_transaction_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
+    payu_order_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
+    raw_webhook: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class AgentQuotaModel(Base):
     """
     Tabla agent_quotas — cuota de uso del agente conversacional para tier Free.

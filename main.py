@@ -25,6 +25,8 @@ from backend.presentation.routers.plan_router import router as plan_router
 from backend.presentation.routers.plan_router import vet_router
 from backend.presentation.routers.agent_router import router as agent_router
 from backend.presentation.routers.export_router import router as export_router
+from backend.presentation.routers.device_router import router as device_router
+from backend.presentation.routers.subscription_router import router as subscription_router
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # CORS_ORIGINS debe ser una lista separada por comas en producción.
@@ -72,6 +74,8 @@ app.include_router(plan_router)
 app.include_router(vet_router)
 app.include_router(agent_router)
 app.include_router(export_router)
+app.include_router(device_router)
+app.include_router(subscription_router)
 
 
 @app.get("/health")
