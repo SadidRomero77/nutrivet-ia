@@ -13,11 +13,15 @@ from backend.domain.aggregates.user_account import UserRole
 
 
 class RegisterRequest(BaseModel):
-    """Body del endpoint POST /v1/auth/register."""
+    """
+    Body del endpoint POST /v1/auth/register.
+
+    El registro público crea SOLO cuentas de tipo owner.
+    Los vets y admins se crean exclusivamente via /v1/admin/users/create-vet.
+    """
 
     email: EmailStr
     password: str
-    role: UserRole = UserRole.OWNER
     full_name: Optional[str] = None
     phone: Optional[str] = None
 
@@ -105,3 +109,73 @@ class UserStatsResponse(BaseModel):
     # Vet
     patients_count: int = 0
     pending_plans_count: int = 0
+
+
+class AdminCreateVetRequest(BaseModel):
+    """Body para crear una cuenta de veterinario desde el panel admin."""
+
+    email: EmailStr
+    password: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    clinic_name: Optional[str] = None
+    specialization: Optional[str] = None
+    license_number: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+        return v
+
+
+class AdminUserResponse(BaseModel):
+    """Respuesta completa de usuario para el panel admin."""
+
+    user_id: uuid.UUID
+    email: str
+    role: str
+    tier: str
+    is_active: bool
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    clinic_name: Optional[str] = None
+    specialization: Optional[str] = None
+    license_number: Optional[str] = None
+    vet_status: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class AdminChangeTierRequest(BaseModel):
+    """Body para cambiar el tier de un usuario."""
+
+    tier: str  # free | basico | premium | vet
+
+
+class AdminRejectVetRequest(BaseModel):
+    """Body para rechazar un vet con comentario."""
+
+    comment: str = ""
+
+
+class AdminOverviewStats(BaseModel):
+    """Estadísticas globales para el dashboard admin."""
+
+    total_users: int = 0
+    owners_count: int = 0
+    vets_count: int = 0
+    vets_pending: int = 0
+    active_subscriptions: int = 0
+    total_payments: int = 0
+    total_revenue_cop: float = 0.0
+
+
+class PaymentHistoryItem(BaseModel):
+    """Un registro de pago en el historial."""
+
+    payment_id: uuid.UUID
+    tier: str
+    amount_cop: float
+    status: str
+    created_at: Optional[str] = None

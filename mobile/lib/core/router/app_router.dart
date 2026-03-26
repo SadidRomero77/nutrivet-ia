@@ -28,6 +28,13 @@ import '../../features/auth/presentation/change_password_screen.dart';
 import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_screen.dart';
 import '../../features/subscription/presentation/subscription_screen.dart';
+import '../../features/subscription/presentation/payment_history_screen.dart';
+import '../../features/admin/presentation/admin_dashboard_screen.dart';
+import '../../features/admin/presentation/admin_user_list_screen.dart';
+import '../../features/admin/presentation/admin_user_detail_screen.dart';
+import '../../features/admin/presentation/admin_vets_pending_screen.dart';
+import '../../features/admin/presentation/admin_create_vet_screen.dart';
+import '../../features/admin/presentation/admin_payments_screen.dart';
 import '../storage/secure_storage.dart';
 
 part 'app_router.g.dart';
@@ -50,19 +57,26 @@ GoRouter appRouter(Ref ref) {
       final role = await storage.readRole();
 
       if (hasTokens && isAuthRoute) {
+        if (role == 'admin') return '/admin';
         return role == 'vet' ? '/vet/dashboard' : '/dashboard';
       }
 
-      // Guards de rol: evita que owner acceda a rutas de vet y viceversa
+      // Guards de rol: evita que owner acceda a rutas de vet/admin y viceversa
       if (hasTokens && role != null) {
         final isVetRoute = loc.startsWith('/vet/');
+        final isAdminRoute = loc.startsWith('/admin');
         final isOwnerOnlyRoute = loc == '/dashboard' ||
             loc == '/pet/new' ||
             loc == '/pets/claim' ||
             loc.startsWith('/pet/');
 
+        if (isAdminRoute && role != 'admin') {
+          return role == 'vet' ? '/vet/dashboard' : '/dashboard';
+        }
         if (isVetRoute && role != 'vet') return '/dashboard';
-        if (isOwnerOnlyRoute && role == 'vet') return '/vet/dashboard';
+        if (isOwnerOnlyRoute && (role == 'vet' || role == 'admin')) {
+          return role == 'vet' ? '/vet/dashboard' : '/admin';
+        }
       }
 
       return null;
@@ -149,6 +163,37 @@ GoRouter appRouter(Ref ref) {
         path: '/subscription',
         builder: (_, __) => const SubscriptionScreen(),
       ),
+      // ── Admin routes ─────────────────────────────────────────────────────
+      GoRoute(
+        path: '/admin',
+        builder: (_, __) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/admin/users',
+        builder: (_, __) => const AdminUserListScreen(),
+      ),
+      GoRoute(
+        path: '/admin/users/:userId',
+        builder: (_, state) =>
+            AdminUserDetailScreen(userId: state.pathParameters['userId']!),
+      ),
+      GoRoute(
+        path: '/admin/vets/pending',
+        builder: (_, __) => const AdminVetsPendingScreen(),
+      ),
+      GoRoute(
+        path: '/admin/vets/new',
+        builder: (_, __) => const AdminCreateVetScreen(),
+      ),
+      GoRoute(
+        path: '/admin/payments',
+        builder: (_, __) => const AdminPaymentsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/payments',
+        builder: (_, __) => const PaymentHistoryScreen(),
+      ),
+      // ── Vet routes ───────────────────────────────────────────────────────
       GoRoute(
         path: '/vet/dashboard',
         builder: (_, __) => const VetDashboardScreen(),
@@ -207,7 +252,11 @@ class _SplashScreenState extends ConsumerState<_SplashScreen> {
         final storage = ref.read(secureStorageProvider);
         final role = await storage.readRole();
         if (mounted) {
+          if (role == 'admin') {
+          context.go('/admin');
+        } else {
           context.go(role == 'vet' ? '/vet/dashboard' : '/dashboard');
+        }
         }
       }
     }

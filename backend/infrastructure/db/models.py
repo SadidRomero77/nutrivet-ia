@@ -25,7 +25,7 @@ class UserModel(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(
-        Enum("owner", "vet", name="user_role_enum"), nullable=False
+        Enum("owner", "vet", "admin", name="user_role_enum"), nullable=False
     )
     tier: Mapped[str] = mapped_column(
         Enum("free", "basico", "premium", "vet", name="user_tier_enum"),
@@ -41,6 +41,9 @@ class UserModel(Base):
     clinic_name: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None)
     specialization: Mapped[str | None] = mapped_column(String(150), nullable=True, default=None)
     license_number: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    vet_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default=None
+    )  # pending | approved | rejected — solo para rol vet
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

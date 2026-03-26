@@ -24,6 +24,7 @@ class UserProfile {
     this.clinicName,
     this.specialization,
     this.licenseNumber,
+    this.vetStatus,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -36,6 +37,7 @@ class UserProfile {
         clinicName: json['clinic_name'] as String?,
         specialization: json['specialization'] as String?,
         licenseNumber: json['license_number'] as String?,
+        vetStatus: json['vet_status'] as String?,
       );
 
   final String userId;
@@ -47,6 +49,8 @@ class UserProfile {
   final String? clinicName;
   final String? specialization;
   final String? licenseNumber;
+  /// Estado de verificación del veterinario: pending | approved | null
+  final String? vetStatus;
 }
 
 /// Estadísticas de actividad del usuario autenticado.

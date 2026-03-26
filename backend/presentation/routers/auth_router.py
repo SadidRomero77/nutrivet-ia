@@ -81,10 +81,11 @@ async def register(
     """
     try:
         uc = _build_use_case(session, jwt_service)
+        from backend.domain.aggregates.user_account import UserRole as _UserRole
         result: UseCaseTokenResponse = await uc.register(
             email=str(body.email),
             password=body.password,
-            role=body.role,
+            role=_UserRole.OWNER,  # El registro público SIEMPRE crea owners — vets via admin
             full_name=body.full_name,
             phone=body.phone,
         )

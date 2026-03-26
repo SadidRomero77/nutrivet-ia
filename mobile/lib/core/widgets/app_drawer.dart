@@ -32,6 +32,7 @@ class AppDrawer extends ConsumerWidget {
     final profileAsync = ref.watch(_myProfileProvider);
     final profile = profileAsync.valueOrNull;
     final isVet = profile?.role == 'vet';
+    final isAdmin = profile?.role == 'admin';
 
     // Carga síncrona: owners usan petsProvider, vets usan vetPatientsProvider
     final pets = isVet
@@ -100,7 +101,49 @@ class AppDrawer extends ConsumerWidget {
               children: [
                 const SizedBox(height: 8),
 
-                if (isVet) ...[
+                if (isAdmin) ...[
+                  // ── Menú administrador ──────────────────────────────────
+                  _DrawerItem(
+                    icon: Icons.dashboard_outlined,
+                    title: 'Panel Admin',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.go('/admin');
+                    },
+                  ),
+                  _DrawerItem(
+                    icon: Icons.people_outline,
+                    title: 'Usuarios',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/admin/users');
+                    },
+                  ),
+                  _DrawerItem(
+                    icon: Icons.pending_actions,
+                    title: 'Vets pendientes',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/admin/vets/pending');
+                    },
+                  ),
+                  _DrawerItem(
+                    icon: Icons.person_add_outlined,
+                    title: 'Crear veterinario',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/admin/vets/new');
+                    },
+                  ),
+                  _DrawerItem(
+                    icon: Icons.payments_outlined,
+                    title: 'Pagos',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/admin/payments');
+                    },
+                  ),
+                ] else if (isVet) ...[
                   // ── Menú veterinario ────────────────────────────────────
                   _DrawerItem(
                     icon: Icons.pending_actions_outlined,
@@ -259,7 +302,7 @@ class AppDrawer extends ConsumerWidget {
                   },
                 ),
 
-                if (!isVet)
+                if (!isVet && !isAdmin)
                   _DrawerItem(
                     icon: Icons.workspace_premium_outlined,
                     title: 'Suscripción',
@@ -270,7 +313,17 @@ class AppDrawer extends ConsumerWidget {
                     },
                   ),
 
-                if (!isVet) ...[
+                if (!isAdmin)
+                  _DrawerItem(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Historial de pagos',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/profile/payments');
+                    },
+                  ),
+
+                if (!isVet && !isAdmin) ...[
                   _DrawerItem(
                     icon: Icons.qr_code_scanner_outlined,
                     title: 'Vincular mascota clínica',

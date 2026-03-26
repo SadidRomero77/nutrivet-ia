@@ -301,6 +301,30 @@ async def _approve_payment_in_session(
         logger.error("Error enviando push de suscripción: %s", e)
 
 
+@router.get("/v1/subscriptions/history", response_model=list[dict], summary="Historial de pagos del usuario")
+async def get_payment_history(
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(get_current_user),
+) -> list[dict]:
+    """Retorna los pagos del usuario autenticado ordenados por fecha descendente."""
+    result = await session.execute(
+        select(PaymentModel)
+        .where(PaymentModel.user_id == user.user_id)
+        .order_by(PaymentModel.created_at.desc())
+        .limit(20)
+    )
+    return [
+        {
+            "payment_id": str(row.id),
+            "tier": row.tier,
+            "amount_cop": float(row.amount_cop),
+            "status": row.status,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in result.scalars()
+    ]
+
+
 @router.get("/v1/subscriptions/status", response_model=SubscriptionStatusResponse)
 async def get_subscription_status(
     session: AsyncSession = Depends(get_db_session),

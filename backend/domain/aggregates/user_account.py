@@ -18,6 +18,7 @@ class UserRole(str, Enum):
 
     OWNER = "owner"
     VET = "vet"
+    ADMIN = "admin"
 
 
 class UserTier(str, Enum):
@@ -82,6 +83,7 @@ class UserAccount:
     clinic_name: Optional[str] = None
     specialization: Optional[str] = None
     license_number: Optional[str] = None
+    vet_status: Optional[str] = None  # pending | approved | rejected (solo rol vet)
 
     # -- Factory method --
 

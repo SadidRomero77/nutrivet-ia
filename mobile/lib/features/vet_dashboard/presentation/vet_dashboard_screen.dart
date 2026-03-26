@@ -24,6 +24,10 @@ Future<List<VetPendingPlan>> _pendingPlans(Ref ref) =>
     ref.read(vetRepositoryProvider).listPendingPlans();
 
 @riverpod
+Future<UserProfile> _vetProfile(Ref ref) =>
+    ref.read(authRepositoryProvider).getMe();
+
+@riverpod
 Future<List<PetModel>> _vetPatients(Ref ref) =>
     ref.read(vetRepositoryProvider).listPatients();
 
@@ -55,10 +59,17 @@ class VetDashboardScreen extends ConsumerWidget {
           ),
         ),
         drawer: const AppDrawer(),
-        body: const TabBarView(
+        body: Column(
           children: [
-            _PendingPlansTab(),
-            _PatientsTab(),
+            const _VetPendingBanner(),
+            const Expanded(
+              child: TabBarView(
+                children: [
+                  _PendingPlansTab(),
+                  _PatientsTab(),
+                ],
+              ),
+            ),
           ],
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -278,6 +289,37 @@ class _PendingPlanCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Banner visible cuando el vet aún tiene vet_status == 'pending'.
+class _VetPendingBanner extends ConsumerWidget {
+  const _VetPendingBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(_vetProfileProvider);
+    final profile = profileAsync.valueOrNull;
+    if (profile?.vetStatus != 'pending') return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: Colors.orange.shade50,
+      child: Row(
+        children: [
+          const Icon(Icons.pending_actions, color: Colors.orange, size: 18),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Tu cuenta está pendiente de verificación. '
+              'Podrás aprobar planes una vez el administrador confirme tu matrícula.',
+              style: TextStyle(fontSize: 12, color: Colors.orange),
+            ),
+          ),
+        ],
       ),
     );
   }
