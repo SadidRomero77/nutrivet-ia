@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -29,6 +30,10 @@ const _medicalConditions = [
   'gastritis',
   'cistitis/enfermedad_urinaria',
   'sobrepeso/obesidad',
+  'insuficiencia_cardiaca',
+  'hiperadrenocorticismo_cushing',
+  'epilepsia',
+  'megaesofago',
 ];
 
 const _allergens = [
@@ -565,9 +570,30 @@ class _ClaimCodeSuccess extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: () => context.go('/vet/dashboard'),
-                child: const Text('Volver al dashboard'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: code));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Código copiado al portapapeles'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy, size: 18),
+                    label: const Text('Copiar código'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () => context.go('/vet/dashboard'),
+                    child: const Text('Volver al dashboard'),
+                  ),
+                ],
               ),
             ],
           ),
