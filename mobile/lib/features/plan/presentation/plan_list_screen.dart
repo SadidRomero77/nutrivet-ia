@@ -18,14 +18,34 @@ Future<List<PlanSummary>> _planList(Ref ref, String petId) async {
   return all.where((p) => p.petId == petId).toList();
 }
 
-class PlanListScreen extends ConsumerWidget {
+class PlanListScreen extends ConsumerStatefulWidget {
   const PlanListScreen({super.key, required this.petId});
 
   final String petId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final plansAsync = ref.watch(_planListProvider(petId));
+  ConsumerState<PlanListScreen> createState() => _PlanListScreenState();
+}
+
+class _PlanListScreenState extends ConsumerState<PlanListScreen> {
+  String? _activeJobId;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkActiveJob();
+  }
+
+  Future<void> _checkActiveJob() async {
+    final jobId = await ref
+        .read(planRepositoryProvider)
+        .getActiveJob(widget.petId);
+    if (mounted) setState(() => _activeJobId = jobId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final plansAsync = ref.watch(_planListProvider(widget.petId));
 
     return Scaffold(
       appBar: AppBar(title: const NutrivetTitle('Planes nutricionales')),
@@ -33,37 +53,143 @@ class PlanListScreen extends ConsumerWidget {
       body: plansAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error: $err')),
-        data: (plans) => plans.isEmpty
-            ? const Center(
-                child: Text('No hay planes generados para esta mascota.'),
-              )
-            : Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: Breakpoints.maxContentWidth),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    itemCount: plans.length + 1, // +1 para disclaimer al final
-                    itemBuilder: (context, i) {
-                      if (i == plans.length) {
-                        return const Padding(
-                          padding: EdgeInsets.only(top: 8, bottom: 16),
-                          child: Text(
-                            'NutriVet.IA es asesoría nutricional digital — '
-                            'no reemplaza el diagnóstico médico veterinario.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        );
-                      }
-                      return _PlanSummaryCard(plan: plans[i]);
-                    },
-                  ),
+        data: (plans) {
+          final hasJob = _activeJobId != null;
+          final isEmpty = plans.isEmpty && !hasJob;
+
+          if (isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.description_outlined,
+                        size: 48, color: Colors.grey.shade400),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No hay planes generados para esta mascota.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => context.push(
+                        '/plan/generate?petId=${widget.petId}',
+                      ),
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Generar primer plan'),
+                    ),
+                  ],
                 ),
               ),
+            );
+          }
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: Breakpoints.maxContentWidth),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(_planListProvider(widget.petId));
+                  await _checkActiveJob();
+                },
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  itemCount: (hasJob ? 1 : 0) + plans.length + 1,
+                  itemBuilder: (context, i) {
+                    // Primer ítem: job en curso (si existe)
+                    if (hasJob && i == 0) {
+                      return _InProgressJobCard(
+                        onTap: () => context.push(
+                          '/plan/generate?petId=${widget.petId}',
+                        ),
+                      );
+                    }
+                    final planIdx = hasJob ? i - 1 : i;
+                    if (planIdx == plans.length) {
+                      return const Padding(
+                        padding: EdgeInsets.only(top: 8, bottom: 16),
+                        child: Text(
+                          'NutriVet.IA es asesoría nutricional digital — '
+                          'no reemplaza el diagnóstico médico veterinario.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      );
+                    }
+                    return _PlanSummaryCard(plan: plans[planIdx]);
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Tarjeta que indica que hay un plan siendo generado en este momento.
+class _InProgressJobCard extends StatelessWidget {
+  const _InProgressJobCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.4)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Generando plan nutricional...',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Toca para ver el progreso',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: theme.colorScheme.primary),
+            ],
+          ),
+        ),
       ),
     );
   }

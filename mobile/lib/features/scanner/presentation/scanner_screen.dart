@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -179,9 +180,72 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
           if (_result != null) ...[
             const SizedBox(height: 16),
             _ScanResult(result: _result!),
+            const SizedBox(height: 12),
+            _ScanResultActions(
+              result: _result!,
+              onReset: () => setState(() {
+                _image = null;
+                _result = null;
+                _error = null;
+              }),
+            ),
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Botones de acción post-escaneo: copiar resultado y escanear de nuevo.
+class _ScanResultActions extends StatelessWidget {
+  const _ScanResultActions({
+    required this.result,
+    required this.onReset,
+  });
+
+  final Map<String, dynamic> result;
+  final VoidCallback onReset;
+
+  String _buildSummaryText() {
+    final semaphore = result['semaphore'] as String? ?? 'amarillo';
+    final observations = result['observations'] as String? ?? '';
+    final toxics = (result['toxic_ingredients'] as List?)
+            ?.map((e) => e.toString())
+            .join(', ') ??
+        '';
+    final buf = StringBuffer('Resultado del escáner NutriVet.IA\n');
+    buf.write('Semáforo: $semaphore\n');
+    if (observations.isNotEmpty) buf.write('$observations\n');
+    if (toxics.isNotEmpty) buf.write('Ingredientes problemáticos: $toxics\n');
+    buf.write('\nNutriVet.IA es asesoría nutricional digital — no reemplaza el diagnóstico veterinario.');
+    return buf.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: _buildSummaryText()));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Resultado copiado al portapapeles')),
+              );
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Copiar resultado'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onReset,
+            icon: const Icon(Icons.qr_code_scanner, size: 18),
+            label: const Text('Nuevo escaneo'),
+          ),
+        ),
+      ],
     );
   }
 }

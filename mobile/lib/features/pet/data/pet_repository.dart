@@ -139,6 +139,22 @@ class PetRepository {
     }
   }
 
+  /// Obtiene una mascota por ID. Usa cache Hive si está disponible.
+  Future<PetModel> getPet(String petId) async {
+    final box = await Hive.openBox<Map>(_boxName);
+    try {
+      final response =
+          await dio.get<Map<String, dynamic>>('/v1/pets/$petId');
+      return PetModel.fromJson(response.data!);
+    } on DioException {
+      final cached = box.get(petId);
+      if (cached != null) {
+        return PetModel.fromJson(Map<String, dynamic>.from(cached));
+      }
+      rethrow;
+    }
+  }
+
   /// Actualiza datos editables de la mascota (peso, BCS, actividad, dieta).
   Future<PetModel> updatePet(String petId, Map<String, dynamic> data) async {
     try {

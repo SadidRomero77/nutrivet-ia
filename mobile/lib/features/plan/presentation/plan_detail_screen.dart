@@ -92,6 +92,11 @@ class _PlanContent extends StatelessWidget {
           children: [
             // Estado del plan
             _StatusBanner(status: plan.status),
+            // Comentario del vet si el plan fue devuelto (UNDER_REVIEW)
+            if (plan.vetComment != null && plan.vetComment!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _VetCommentBanner(comment: plan.vetComment!),
+            ],
             const SizedBox(height: 16),
 
             // Objetivos clínicos
@@ -1046,12 +1051,18 @@ class _StatusBanner extends StatelessWidget {
       'ACTIVE' => (Colors.green, 'Activo — listo para usar', null, Icons.check_circle),
       'PENDING_VET' => (
           Colors.orange,
-          'Pendiente revisión veterinaria',
-          'El veterinario revisará el plan antes de activarlo. '
-              'Podrás exportarlo una vez que sea aprobado.',
-          Icons.pending,
+          'En revisión veterinaria',
+          'Tu veterinario revisará y aprobará el plan. '
+              'Tiempo estimado: 24-48 horas. '
+              'Recibirás una notificación cuando esté listo.',
+          Icons.hourglass_top,
         ),
-      'UNDER_REVIEW' => (Colors.blue, 'En revisión', null, Icons.rate_review),
+      'UNDER_REVIEW' => (
+          Colors.blue,
+          'El veterinario devolvió el plan',
+          'Tu vet dejó un comentario. Revisa la nota abajo.',
+          Icons.rate_review,
+        ),
       'ARCHIVED' => (Colors.grey, 'Archivado', null, Icons.archive),
       _ => (Colors.grey, status, null, Icons.info),
     };
@@ -1078,6 +1089,52 @@ class _StatusBanner extends StatelessWidget {
                   Text(subtitle, style: TextStyle(color: color.withOpacity(0.8), fontSize: 12)),
                 ],
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Banner prominente que muestra el comentario del vet cuando devuelve el plan.
+class _VetCommentBanner extends StatelessWidget {
+  const _VetCommentBanner({required this.comment});
+
+  final String comment;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.secondary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.comment_outlined, size: 16, color: theme.colorScheme.secondary),
+              const SizedBox(width: 6),
+              Text(
+                'Nota del veterinario',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.secondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            comment,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSecondaryContainer,
             ),
           ),
         ],
@@ -1137,7 +1194,7 @@ class _PlanSection extends StatelessWidget {
   }
 }
 
-/// Pantalla para generar un plan con polling automático.
+/// Pantalla para generar un plan con polling automático y progreso visual.
 class GeneratePlanScreen extends ConsumerStatefulWidget {
   const GeneratePlanScreen(
       {super.key, required this.petId, required this.petName});
@@ -1153,12 +1210,21 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
   String _modality = 'natural';
   bool _loading = false;
   String? _jobId;
-  String? _statusMsg;
+  String? _errorMsg;
+  int _currentStep = 0; // 0=idle, 1=encolando, 2=calculando, 3=generando, 4=verificando
+
+  static const _steps = [
+    (Icons.schedule, 'Encolando solicitud'),
+    (Icons.calculate_outlined, 'Calculando requerimientos NRC'),
+    (Icons.auto_awesome, 'Generando plan con IA'),
+    (Icons.shield_outlined, 'Verificando seguridad nutricional'),
+  ];
 
   Future<void> _generate() async {
     setState(() {
       _loading = true;
-      _statusMsg = 'Encolando generación del plan...';
+      _errorMsg = null;
+      _currentStep = 1;
     });
     try {
       final repo = ref.read(planRepositoryProvider);
@@ -1167,13 +1233,15 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
         modality: _modality,
       );
       _jobId = job.jobId;
+      // Persistir para que plan_list_screen muestre el estado en curso
+      await repo.saveActiveJob(widget.petId, job.jobId);
       await _pollUntilReady(repo);
     } catch (_) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _statusMsg =
-              'Error al iniciar la generación del plan. Intenta de nuevo.';
+          _currentStep = 0;
+          _errorMsg = 'Error al iniciar la generación del plan. Intenta de nuevo.';
         });
       }
     }
@@ -1187,16 +1255,19 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
       if (!mounted) return;
       try {
         final job = await repo.getJobStatus(_jobId!);
-        setState(() => _statusMsg = _jobStatusLabel(job.status));
+        // Avanzar pasos según el tiempo transcurrido para dar feedback visual
+        setState(() => _currentStep = _stepFromIteration(i, job.status));
         if (job.isReady && job.planId != null) {
+          await repo.clearActiveJob(widget.petId);
           if (mounted) context.go('/plan/${job.planId}');
           return;
         }
         if (job.isFailed) {
+          await repo.clearActiveJob(widget.petId);
           setState(() {
             _loading = false;
-            _statusMsg =
-                'No fue posible generar el plan. Intenta de nuevo o contacta soporte.';
+            _currentStep = 0;
+            _errorMsg = 'No fue posible generar el plan. Intenta de nuevo o contacta soporte.';
           });
           return;
         }
@@ -1204,20 +1275,24 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
         // Error de red durante polling — continuar hasta agotar intentos
       }
     }
+    // Timeout — limpiar job y mostrar mensaje
+    await repo.clearActiveJob(widget.petId);
     setState(() {
       _loading = false;
-      _statusMsg = 'La generación está tomando más de lo esperado. '
+      _currentStep = 0;
+      _errorMsg = 'La generación está tomando más de lo esperado. '
           'Revisa "Mis planes" en unos minutos — el plan puede estar listo.';
     });
   }
 
-  String _jobStatusLabel(String status) => switch (status) {
-        'QUEUED' => 'En cola...',
-        'PROCESSING' => 'Generando plan con IA...',
-        'READY' => '¡Plan listo!',
-        'FAILED' => 'Error en la generación',
-        _ => status,
-      };
+  int _stepFromIteration(int iteration, String status) {
+    if (status == 'PROCESSING') {
+      if (iteration < 3) return 2;
+      if (iteration < 8) return 3;
+      return 4;
+    }
+    return 1; // QUEUED
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1228,66 +1303,177 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
           title: NutrivetTitle('Generar plan — ${widget.petName}')),
       body: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Modalidad del plan', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 16),
-            RadioListTile<String>(
-              key: const ValueKey('modality_natural'),
-              title: const Text('Dieta Natural (BARF/casera)'),
-              subtitle:
-                  const Text('Ingredientes frescos con porciones en gramos'),
-              value: 'natural',
-              groupValue: _modality,
-              onChanged:
-                  _loading ? null : (v) => setState(() => _modality = v!),
-            ),
-            RadioListTile<String>(
-              key: const ValueKey('modality_concentrado'),
-              title: const Text('Concentrado comercial'),
-              subtitle:
-                  const Text('Criterios de selección del alimento ideal'),
-              value: 'concentrado',
-              groupValue: _modality,
-              onChanged:
-                  _loading ? null : (v) => setState(() => _modality = v!),
-            ),
-            const SizedBox(height: 32),
-            if (_statusMsg != null) ...[
-              Row(
+        child: _loading
+            ? _GenerationProgress(currentStep: _currentStep, steps: _steps)
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_loading) ...[
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: Text(
-                      _statusMsg!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: _statusMsg!.startsWith('Error')
-                            ? theme.colorScheme.error
-                            : null,
+                  Text('Modalidad del plan', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 16),
+                  RadioListTile<String>(
+                    key: const ValueKey('modality_natural'),
+                    title: const Text('Dieta Natural (BARF/casera)'),
+                    subtitle:
+                        const Text('Ingredientes frescos con porciones en gramos'),
+                    value: 'natural',
+                    groupValue: _modality,
+                    onChanged: (v) => setState(() => _modality = v!),
+                  ),
+                  RadioListTile<String>(
+                    key: const ValueKey('modality_concentrado'),
+                    title: const Text('Concentrado comercial'),
+                    subtitle:
+                        const Text('Criterios de selección del alimento ideal'),
+                    value: 'concentrado',
+                    groupValue: _modality,
+                    onChanged: (v) => setState(() => _modality = v!),
+                  ),
+                  if (_errorMsg != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: theme.colorScheme.error, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _errorMsg!,
+                              style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      key: const ValueKey('generate_button'),
+                      onPressed: _generate,
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Generar plan nutricional'),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-            ],
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                key: const ValueKey('generate_button'),
-                onPressed: _loading ? null : _generate,
-                icon: const Icon(Icons.auto_awesome),
-                label:
-                    Text(_loading ? 'Generando...' : 'Generar plan nutricional'),
+      ),
+    );
+  }
+}
+
+/// Indicador visual de progreso durante la generación del plan.
+class _GenerationProgress extends StatelessWidget {
+  const _GenerationProgress({
+    required this.currentStep,
+    required this.steps,
+  });
+
+  final int currentStep;
+  final List<(IconData, String)> steps;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 64,
+              height: 64,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Generando plan nutricional...',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Esto puede tomar entre 30 segundos y 2 minutos.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ...steps.asMap().entries.map((entry) {
+              final stepNum = entry.key + 1;
+              final (icon, label) = entry.value;
+              final isDone = stepNum < currentStep;
+              final isActive = stepNum == currentStep;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDone
+                            ? Colors.green
+                            : isActive
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.surfaceContainerHighest,
+                      ),
+                      child: Icon(
+                        isDone ? Icons.check : icon,
+                        size: 16,
+                        color: isDone || isActive ? Colors.white : theme.colorScheme.outline,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isDone
+                              ? Colors.green
+                              : isActive
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outline,
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                    if (isActive)
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    if (isDone)
+                      const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+            Text(
+              'NutriVet.IA es asesoría nutricional digital — '
+              'no reemplaza el diagnóstico médico veterinario.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

@@ -182,45 +182,120 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Column(
-      children: [
-        Expanded(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: Breakpoints.maxFormWidth),
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('🐾', style: TextStyle(fontSize: 64)),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Aún no tienes mascotas registradas',
-                      style: theme.textTheme.titleMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Agrega tu primera mascota para generar\nsu plan nutricional personalizado.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.outline,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: onAdd,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Agregar mascota'),
-                    ),
-                  ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: Breakpoints.maxFormWidth),
+          child: Column(
+            children: [
+              const Text('🐾', style: TextStyle(fontSize: 56)),
+              const SizedBox(height: 12),
+              Text(
+                '¡Bienvenido a NutriVet.IA!',
+                style: theme.textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Planes nutricionales personalizados para tu mascota,\nvalidados con estándares NRC/AAFCO.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              // Guía de 3 pasos
+              _OnboardingStep(
+                step: 1,
+                icon: Icons.pets,
+                title: 'Registra tu mascota',
+                description: 'Ingresa especie, raza, peso, condición corporal y antecedentes médicos.',
+                color: theme.colorScheme.primary,
+              ),
+              _OnboardingStep(
+                step: 2,
+                icon: Icons.restaurant_menu,
+                title: 'Genera su plan nutricional',
+                description: 'El agente calcula sus requerimientos NRC y diseña un plan con ingredientes LATAM.',
+                color: theme.colorScheme.secondary,
+              ),
+              _OnboardingStep(
+                step: 3,
+                icon: Icons.chat_bubble_outline,
+                title: 'Consulta al agente',
+                description: 'Resuelve dudas sobre nutrición en cualquier momento del plan.',
+                color: theme.colorScheme.tertiary,
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar mi primera mascota'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 ),
               ),
-            ),
+            ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _OnboardingStep extends StatelessWidget {
+  const _OnboardingStep({
+    required this.step,
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.color,
+  });
+
+  final int step;
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: color.withOpacity(0.12),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$step. $title',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

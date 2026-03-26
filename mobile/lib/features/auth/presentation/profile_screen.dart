@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/widgets/app_footer.dart';
@@ -105,6 +106,17 @@ class ProfileScreen extends ConsumerWidget {
                       label: 'Plan',
                       value: _tierLabel(profile.tier),
                     ),
+                    if (profile.tier == 'free' && profile.role != 'vet') ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => context.push('/subscription'),
+                          icon: const Icon(Icons.upgrade, size: 18),
+                          label: const Text('Actualizar plan'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

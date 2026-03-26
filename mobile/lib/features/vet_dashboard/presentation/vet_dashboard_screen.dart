@@ -166,13 +166,28 @@ class _PendingPlanCard extends StatelessWidget {
   final VetPendingPlan plan;
   final VoidCallback onTap;
 
+  String _waitingLabel() {
+    final h = plan.waitingHours;
+    if (h < 1) return 'Hace menos de 1 hora';
+    if (h < 24) return 'Hace ${h}h';
+    final d = (h / 24).floor();
+    return 'Hace ${d}d ${h % 24}h';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isNatural = plan.modality == 'natural';
+    final urgentColor = theme.colorScheme.error;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: plan.isUrgent
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: urgentColor.withOpacity(0.5), width: 1.5),
+            )
+          : null,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -192,22 +207,40 @@ class _PendingPlanCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Chip(
-                    label: const Text('PENDIENTE'),
-                    backgroundColor: Colors.orange.withOpacity(0.15),
-                    labelStyle: const TextStyle(
-                      color: Colors.orange,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                  if (plan.isUrgent)
+                    Chip(
+                      avatar: Icon(Icons.warning_amber, size: 14, color: urgentColor),
+                      label: Text(
+                        '${plan.conditionsCount} condiciones',
+                        style: TextStyle(color: urgentColor, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      backgroundColor: urgentColor.withOpacity(0.1),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    )
+                  else if (plan.conditionsCount > 0)
+                    Chip(
+                      label: Text(
+                        '${plan.conditionsCount} cond.',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      backgroundColor: Colors.orange.withOpacity(0.12),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    )
+                  else
+                    Chip(
+                      label: const Text('PENDIENTE', style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
+                      backgroundColor: Colors.orange.withOpacity(0.15),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
                     ),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
+                runSpacing: 4,
                 children: [
                   _InfoChip(
                     icon: Icons.local_fire_department,
@@ -220,6 +253,10 @@ class _PendingPlanCard extends StatelessWidget {
                   _InfoChip(
                     icon: isNatural ? Icons.eco : Icons.inventory_2_outlined,
                     label: isNatural ? 'Natural/BARF' : 'Concentrado',
+                  ),
+                  _InfoChip(
+                    icon: Icons.schedule,
+                    label: _waitingLabel(),
                   ),
                 ],
               ),
@@ -301,38 +338,83 @@ class _PatientCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasOwner = pet.ownerName != null;
+    final hasConditions = pet.medicalConditions.isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Text(
-            pet.species == 'perro' ? '🐕' : '🐈',
-            style: const TextStyle(fontSize: 22),
-          ),
-        ),
-        title: Text(
-          pet.name,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${pet.breed} · ${pet.weightKg} kg · BCS ${pet.bcs}/9'),
-            if (hasOwner)
-              Text(
-                'Propietario: ${pet.ownerName}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.colorScheme.outline,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: theme.colorScheme.primaryContainer,
+                child: Text(
+                  pet.species == 'perro' ? '🐕' : '🐈',
+                  style: const TextStyle(fontSize: 22),
                 ),
               ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pet.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      '${pet.breed} · ${pet.weightKg} kg · BCS ${pet.bcs}/9',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    if (hasOwner)
+                      Text(
+                        'Propietario: ${pet.ownerName}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    if (hasConditions) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: pet.medicalConditions.take(3).map((c) {
+                          final label = c.replaceAll('_', ' ');
+                          return Chip(
+                            label: Text(label, style: const TextStyle(fontSize: 10)),
+                            backgroundColor:
+                                theme.colorScheme.errorContainer.withOpacity(0.5),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                          );
+                        }).toList()
+                          ..addAll(
+                            pet.medicalConditions.length > 3
+                                ? [
+                                    Chip(
+                                      label: Text(
+                                        '+${pet.medicalConditions.length - 3} más',
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                    )
+                                  ]
+                                : [],
+                          ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 18),
+            ],
+          ),
         ),
-        isThreeLine: hasOwner,
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }

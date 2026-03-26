@@ -452,6 +452,8 @@ class PlanRepository {
   static const _summaryBoxName = 'plan_summaries';
   static const _detailBoxName = 'plan_details';
 
+  static const _activeJobsBox = 'active_plan_jobs';
+
   /// Encola la generación de un plan. Retorna job para polling.
   Future<PlanJob> generatePlan({
     required String petId,
@@ -462,6 +464,24 @@ class PlanRepository {
       data: {'pet_id': petId, 'modality': modality},
     );
     return PlanJob.fromJson(response.data!);
+  }
+
+  /// Persiste el job activo para que plan_list_screen pueda mostrarlo.
+  Future<void> saveActiveJob(String petId, String jobId) async {
+    final box = await Hive.openBox<String>(_activeJobsBox);
+    await box.put(petId, jobId);
+  }
+
+  /// Lee el job activo de una mascota (null si no hay ninguno en curso).
+  Future<String?> getActiveJob(String petId) async {
+    final box = await Hive.openBox<String>(_activeJobsBox);
+    return box.get(petId);
+  }
+
+  /// Elimina el job activo una vez que terminó (READY o FAILED).
+  Future<void> clearActiveJob(String petId) async {
+    final box = await Hive.openBox<String>(_activeJobsBox);
+    await box.delete(petId);
   }
 
   /// Polling del estado del job de generación.

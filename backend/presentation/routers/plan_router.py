@@ -350,7 +350,16 @@ def _plan_to_response(plan: Any) -> PlanResponse:
     )
 
 
-def _plan_to_summary(plan: Any) -> PlanSummaryResponse:
+def _plan_to_summary(
+    plan: Any,
+    conditions_count: int = 0,
+    created_at: Any = None,
+) -> PlanSummaryResponse:
+    created_at_str: str | None = None
+    if created_at is not None and hasattr(created_at, "isoformat"):
+        created_at_str = created_at.isoformat()
+    elif created_at is not None:
+        created_at_str = str(created_at)
     return PlanSummaryResponse(
         plan_id=plan.plan_id,
         pet_id=plan.pet_id,
@@ -361,6 +370,8 @@ def _plan_to_summary(plan: Any) -> PlanSummaryResponse:
         der_kcal=plan.der_kcal,
         llm_model_used=plan.llm_model_used,
         approved_by_vet_id=plan.approved_by_vet_id,
+        conditions_count=conditions_count,
+        created_at=created_at_str,
     )
 
 
@@ -560,10 +571,30 @@ async def list_pending_plans(
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(require_role("vet")),
 ) -> list[PlanSummaryResponse]:
-    """Lista planes PENDING_VET para el dashboard del vet."""
-    plan_repo = PostgreSQLPlanRepository(session)
-    plans = await plan_repo.list_pending_vet()
-    return [_plan_to_summary(p) for p in plans]
+    """Lista planes PENDING_VET para el dashboard del vet, ordenados por antigüedad."""
+    from sqlalchemy import select as sa_select
+    from backend.infrastructure.db.models import NutritionPlanModel, PetModel as PetORM
+
+    result = await session.execute(
+        sa_select(NutritionPlanModel, PetORM).join(
+            PetORM, NutritionPlanModel.pet_id == PetORM.id
+        ).where(
+            NutritionPlanModel.status == "PENDING_VET"
+        ).order_by(NutritionPlanModel.created_at.asc())
+    )
+    rows = result.all()
+
+    from backend.infrastructure.db.plan_repository import _to_domain
+    summaries = []
+    for plan_row, pet_row in rows:
+        plan = _to_domain(plan_row)
+        conditions_count = len(pet_row.medical_conditions or [])
+        summaries.append(_plan_to_summary(
+            plan,
+            conditions_count=conditions_count,
+            created_at=plan_row.created_at,
+        ))
+    return summaries
 
 
 def _vet_pet_to_response(pet: Any) -> PetResponse:

@@ -23,18 +23,30 @@ class VetPendingPlan {
     required this.derKcal,
     required this.llmModel,
     required this.createdAt,
+    this.conditionsCount = 0,
   });
 
-  factory VetPendingPlan.fromJson(Map<String, dynamic> json) => VetPendingPlan(
-        planId: json['plan_id'] as String,
-        petId: json['pet_id'] as String,
-        planType: json['plan_type'] as String,
-        modality: json['modality'] as String,
-        rerKcal: (json['rer_kcal'] as num).toDouble(),
-        derKcal: (json['der_kcal'] as num).toDouble(),
-        llmModel: json['llm_model_used'] as String? ?? '',
-        createdAt: DateTime.now(),
-      );
+  factory VetPendingPlan.fromJson(Map<String, dynamic> json) {
+    DateTime createdAt;
+    try {
+      createdAt = json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now();
+    } catch (_) {
+      createdAt = DateTime.now();
+    }
+    return VetPendingPlan(
+      planId: json['plan_id'] as String,
+      petId: json['pet_id'] as String,
+      planType: json['plan_type'] as String,
+      modality: json['modality'] as String,
+      rerKcal: (json['rer_kcal'] as num).toDouble(),
+      derKcal: (json['der_kcal'] as num).toDouble(),
+      llmModel: json['llm_model_used'] as String? ?? '',
+      createdAt: createdAt,
+      conditionsCount: (json['conditions_count'] as num?)?.toInt() ?? 0,
+    );
+  }
 
   final String planId;
   final String petId;
@@ -44,6 +56,13 @@ class VetPendingPlan {
   final double derKcal;
   final String llmModel;
   final DateTime createdAt;
+  final int conditionsCount;
+
+  /// Horas esperando revisión.
+  int get waitingHours => DateTime.now().difference(createdAt).inHours;
+
+  /// Plan con 2+ condiciones médicas → usa Claude Sonnet → prioridad alta.
+  bool get isUrgent => conditionsCount >= 2;
 }
 
 @riverpod

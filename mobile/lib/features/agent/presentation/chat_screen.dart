@@ -3,6 +3,7 @@
 /// - Streaming SSE token a token.
 /// - Disclaimer visible (REGLA 8).
 /// - Mensajes de emergencia → referral al vet.
+/// - Chips de inicio de conversación contextuales.
 library;
 
 import 'dart:math' as math;
@@ -11,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart' show Uuid;
 
+import '../../pet/data/pet_repository.dart';
 import '../data/agent_repository.dart';
 
 
@@ -34,11 +36,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<_ChatMessage> _messages = [];
   bool _sending = false;
   bool _loadingHistory = true;
+  PetModel? _pet;
 
   @override
   void initState() {
     super.initState();
     _loadHistory();
+    _loadPet();
+  }
+
+  Future<void> _loadPet() async {
+    try {
+      final pet = await ref.read(petRepositoryProvider).getPet(widget.petId);
+      if (mounted) setState(() => _pet = pet);
+    } catch (_) {
+      // Pet info opcional — no bloquea el chat
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -128,9 +141,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final petName = _pet?.name;
+    final petConditions = _pet?.medicalConditions ?? [];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Agente NutriVet'),
+        title: Text(petName != null ? 'Chat · $petName' : 'Agente NutriVet'),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(28),
           child: Padding(
@@ -149,11 +165,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             const LinearProgressIndicator(minHeight: 2),
           Expanded(
             child: _messages.isEmpty && !_loadingHistory
-                ? const Center(
-                    child: Text(
-                      'Escribe tu primera pregunta sobre nutrición.',
-                      style: TextStyle(color: Colors.black45),
-                    ),
+                ? _EmptyStateWithChips(
+                    petName: petName,
+                    conditions: petConditions,
+                    onChipTap: (text) {
+                      _msgCtrl.text = text;
+                      _send();
+                    },
                   )
                 : ListView.builder(
                     controller: _scrollCtrl,
@@ -169,6 +187,77 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onSend: _send,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Estado vacío con chips de inicio de conversación contextuales.
+class _EmptyStateWithChips extends StatelessWidget {
+  const _EmptyStateWithChips({
+    required this.petName,
+    required this.conditions,
+    required this.onChipTap,
+  });
+
+  final String? petName;
+  final List<String> conditions;
+  final void Function(String) onChipTap;
+
+  List<String> _buildSuggestions() {
+    final name = petName ?? 'mi mascota';
+    final suggestions = [
+      '¿Cuánto debe comer $name al día?',
+      '¿Puede $name comer zanahoria?',
+      '¿Cuáles son los mejores alimentos para $name?',
+      '¿Qué alimentos debo evitar darle a $name?',
+    ];
+    if (conditions.isNotEmpty) {
+      final cond = conditions.first.replaceAll('_', ' ');
+      suggestions.insert(1, '¿Qué alimentos debo evitar con $cond?');
+    }
+    return suggestions.take(4).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final suggestions = _buildSuggestions();
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.chat_bubble_outline,
+                size: 48, color: theme.colorScheme.primary.withOpacity(0.4)),
+            const SizedBox(height: 12),
+            Text(
+              petName != null
+                  ? '¿Tienes dudas sobre la nutrición de $petName?'
+                  : 'Consulta sobre nutrición de tu mascota',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: suggestions
+                  .map(
+                    (s) => ActionChip(
+                      label: Text(s, style: const TextStyle(fontSize: 13)),
+                      onPressed: () => onChipTap(s),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -209,6 +209,8 @@ class PlanSummaryResponse(BaseModel):
     der_kcal: float
     llm_model_used: str
     approved_by_vet_id: Optional[UUID] = None
+    conditions_count: int = 0
+    created_at: Optional[str] = None
     disclaimer: str = (
         "NutriVet.IA es asesoría nutricional digital — "
         "no reemplaza el diagnóstico médico veterinario."

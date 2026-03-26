@@ -33,11 +33,19 @@ def _mock_quota_repo(daily: int = 0, total: int = 0) -> AsyncMock:
     return repo
 
 
+def _skip_if_mvp() -> None:
+    """Salta tests de cuota si MVP_FREEMIUM_DISABLED está activo."""
+    from backend.infrastructure.config.feature_flags import MVP_FREEMIUM_DISABLED
+    if MVP_FREEMIUM_DISABLED:
+        pytest.skip("MVP_FREEMIUM_DISABLED=True — gate desactivado para piloto")
+
+
 class TestFreemiumGate:
 
     @pytest.mark.asyncio
     async def test_emergencia_no_cuota(self) -> None:
         """Emergency bypassa la cuota — siempre pasa aunque tenga 9/9."""
+        _skip_if_mvp()
         repo = _mock_quota_repo(daily=3, total=9)
         # No debe levantar error
         await check_freemium_gate(
@@ -51,6 +59,7 @@ class TestFreemiumGate:
     @pytest.mark.asyncio
     async def test_free_bloquea_al_superar_total(self) -> None:
         """Free tier con 9/9 usadas → FreemiumGateError."""
+        _skip_if_mvp()
         repo = _mock_quota_repo(daily=0, total=9)
         with pytest.raises(FreemiumGateError, match="upgrade"):
             await check_freemium_gate(
@@ -63,6 +72,7 @@ class TestFreemiumGate:
     @pytest.mark.asyncio
     async def test_free_bloquea_al_superar_diario(self) -> None:
         """Free tier con 3 preguntas hoy → FreemiumGateError en la 4ta."""
+        _skip_if_mvp()
         repo = _mock_quota_repo(daily=3, total=5)
         with pytest.raises(FreemiumGateError, match="día"):
             await check_freemium_gate(
@@ -75,6 +85,7 @@ class TestFreemiumGate:
     @pytest.mark.asyncio
     async def test_free_pasa_con_cuota_disponible(self) -> None:
         """Free tier con 1/3 diarias usadas → pasa."""
+        _skip_if_mvp()
         repo = _mock_quota_repo(daily=1, total=3)
         await check_freemium_gate(
             user_id="user-1",
@@ -111,6 +122,7 @@ class TestFreemiumGate:
     @pytest.mark.asyncio
     async def test_incremento_atomico_antes_llm(self) -> None:
         """El incremento de cuota ocurre ANTES de la llamada LLM."""
+        _skip_if_mvp()
         repo = _mock_quota_repo(daily=0, total=0)
         await check_freemium_gate(
             user_id="user-1",
