@@ -16,6 +16,7 @@ from backend.application.interfaces.plan_repository import IPlanRepository
 from backend.domain.aggregates.user_account import TIER_PLAN_LIMITS, UserTier
 from backend.domain.exceptions.domain_errors import DomainError
 from backend.domain.value_objects.plan_job import PlanJob, PlanJobStatus
+from backend.infrastructure.config.feature_flags import MVP_FREEMIUM_DISABLED
 
 
 class PlanGenerationUseCase:
@@ -72,16 +73,17 @@ class PlanGenerationUseCase:
         if pet.owner_id != owner_id:
             raise DomainError("Acceso denegado: no eres el dueño de esta mascota.")
 
-        # Verificar límite de planes por tier
-        plan_limit = TIER_PLAN_LIMITS[user_tier]
-        if plan_limit is not None:
-            current_count = await self._plan_repo.count_active_by_owner(owner_id)
-            if current_count >= plan_limit:
-                raise DomainError(
-                    f"Has alcanzado el límite de planes para tu plan "
-                    f"({plan_limit} plan{'es' if plan_limit > 1 else ''}). "
-                    "Actualiza tu suscripción para generar más planes."
-                )
+        # Verificar límite de planes por tier (desactivado en MVP — piloto sin restricciones)
+        if not MVP_FREEMIUM_DISABLED:
+            plan_limit = TIER_PLAN_LIMITS[user_tier]
+            if plan_limit is not None:
+                current_count = await self._plan_repo.count_active_by_owner(owner_id)
+                if current_count >= plan_limit:
+                    raise DomainError(
+                        f"Has alcanzado el límite de planes para tu plan "
+                        f"({plan_limit} plan{'es' if plan_limit > 1 else ''}). "
+                        "Actualiza tu suscripción para generar más planes."
+                    )
 
         # Crear job y persistir
         job = PlanJob(

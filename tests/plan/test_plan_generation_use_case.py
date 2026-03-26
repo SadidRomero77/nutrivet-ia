@@ -139,21 +139,32 @@ class TestPlanGenerationEnqueue:
             )
 
     @pytest.mark.asyncio
-    async def test_free_tier_segundo_plan_falla(
-        self, use_case: PlanGenerationUseCase, mock_pet_repo: AsyncMock, mock_plan_repo: AsyncMock
+    async def test_free_tier_segundo_plan_permitido_en_mvp(
+        self, use_case: PlanGenerationUseCase, mock_pet_repo: AsyncMock, mock_plan_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
     ) -> None:
-        """Free tier: ya tiene 1 plan activo → DomainError al intentar generar otro."""
+        """
+        MVP_FREEMIUM_DISABLED=True: el límite de planes por tier está desactivado.
+        Free tier puede generar un segundo plan sin error durante el piloto.
+        Reactivar (cambiar a pytest.raises) antes del launch comercial.
+        """
+        from backend.infrastructure.config.feature_flags import MVP_FREEMIUM_DISABLED
+        if not MVP_FREEMIUM_DISABLED:
+            pytest.skip("Límite de planes activo — test solo aplica en MVP")
+
         pet = _make_pet_stub()
         mock_pet_repo.find_by_id.return_value = pet
         mock_plan_repo.count_active_by_owner.return_value = 1  # ya tiene 1
+        mock_job_repo.save.return_value = None
 
-        with pytest.raises(DomainError, match="(?i)límite"):
-            await use_case.enqueue(
-                pet_id=pet.pet_id,
-                owner_id=pet.owner_id,
-                user_tier=UserTier.FREE,
-                modality="concentrado",
-            )
+        # En MVP no debe lanzar error aunque tenga 1 plan activo
+        job = await use_case.enqueue(
+            pet_id=pet.pet_id,
+            owner_id=pet.owner_id,
+            user_tier=UserTier.FREE,
+            modality="concentrado",
+        )
+        assert job is not None
 
     @pytest.mark.asyncio
     async def test_get_job_retorna_status(

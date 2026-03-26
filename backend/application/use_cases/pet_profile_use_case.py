@@ -12,6 +12,7 @@ from backend.application.interfaces.plan_repository import IPlanRepository
 from backend.domain.aggregates.pet_profile import MedicalCondition, PetProfile
 from backend.domain.aggregates.user_account import UserTier
 from backend.domain.exceptions.domain_errors import DomainError
+from backend.infrastructure.config.feature_flags import MVP_FREEMIUM_DISABLED
 
 # Límites de mascotas por tier (None = ilimitado)
 _TIER_PET_LIMITS: dict[UserTier, int | None] = {
@@ -64,15 +65,16 @@ class PetProfileUseCase:
         Raises:
             DomainError: Si se supera el límite del tier o los datos son inválidos.
         """
-        # Verificar límite de tier
-        current_count = await self._pet_repo.count_by_owner(owner_id)
-        limit = _TIER_PET_LIMITS[user_tier]
-        if limit is not None and current_count >= limit:
-            raise DomainError(
-                f"Has alcanzado el límite de mascotas para tu plan "
-                f"({limit} mascota{'s' if limit > 1 else ''}). "
-                "Actualiza tu suscripción para agregar más."
-            )
+        # Verificar límite de tier (desactivado en MVP — piloto sin restricciones)
+        if not MVP_FREEMIUM_DISABLED:
+            current_count = await self._pet_repo.count_by_owner(owner_id)
+            limit = _TIER_PET_LIMITS[user_tier]
+            if limit is not None and current_count >= limit:
+                raise DomainError(
+                    f"Has alcanzado el límite de mascotas para tu plan "
+                    f"({limit} mascota{'s' if limit > 1 else ''}). "
+                    "Actualiza tu suscripción para agregar más."
+                )
 
         # Construir aggregate — las invariantes se validan en __post_init__
         pet = PetProfile(

@@ -8,8 +8,12 @@ Reglas:
 - El incremento de cuota ocurre ANTES de llamar al LLM (atómico)
 
 Constitution REGLA 9: emergencias no se bloquean bajo ninguna circunstancia.
+
+MVP: MVP_FREEMIUM_DISABLED=True desactiva el gate para el piloto.
 """
 from __future__ import annotations
+
+from backend.infrastructure.config.feature_flags import MVP_FREEMIUM_DISABLED
 
 DAILY_LIMIT = 3
 TOTAL_LIMIT = 9
@@ -45,6 +49,10 @@ async def check_freemium_gate(
     Raises:
         FreemiumGateError: Si el usuario Free superó su cuota diaria o total.
     """
+    # MVP: gate desactivado durante el piloto
+    if MVP_FREEMIUM_DISABLED:
+        return
+
     # Bypass incondicional para emergencias (Constitution REGLA 9)
     if intent == "emergency":
         return
