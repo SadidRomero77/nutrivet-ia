@@ -22,5 +22,21 @@ final _profileProvider = AutoDisposeFutureProvider<UserProfile>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef _ProfileRef = AutoDisposeFutureProviderRef<UserProfile>;
+String _$statsHash() => r'9ec025d7c14244d6aeacc46e6e3380f4d890bdab';
+
+/// See also [_stats].
+@ProviderFor(_stats)
+final _statsProvider = AutoDisposeFutureProvider<UserStats>.internal(
+  _stats,
+  name: r'_statsProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$statsHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef _StatsRef = AutoDisposeFutureProviderRef<UserStats>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

@@ -23,6 +23,22 @@ final _pendingPlansProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef _PendingPlansRef = AutoDisposeFutureProviderRef<List<VetPendingPlan>>;
+String _$vetProfileHash() => r'6a3d4083d77c27b9671672ad38fdfaa1067e392b';
+
+/// See also [_vetProfile].
+@ProviderFor(_vetProfile)
+final _vetProfileProvider = AutoDisposeFutureProvider<UserProfile>.internal(
+  _vetProfile,
+  name: r'_vetProfileProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$vetProfileHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef _VetProfileRef = AutoDisposeFutureProviderRef<UserProfile>;
 String _$vetPatientsHash() => r'1b32de32b8f9624d5e13fdf169c1a6b894830720';
 
 /// See also [_vetPatients].

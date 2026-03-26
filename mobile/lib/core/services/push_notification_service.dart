@@ -13,11 +13,11 @@
 ///   - Seguir guía: https://firebase.google.com/docs/flutter/setup
 library;
 
+import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
-import '../api/api_client.dart';
 import '../storage/secure_storage.dart';
 
 /// Handler de mensajes en background (función de nivel superior — requerido por FCM).
@@ -34,7 +34,15 @@ class PushNotificationService {
   static final PushNotificationService instance = PushNotificationService._();
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-  final ApiClient _api = ApiClient();
+  final Dio _dio = Dio(BaseOptions(
+    baseUrl: const String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: 'http://10.0.2.2:8000',
+    ),
+    headers: {'Content-Type': 'application/json'},
+    connectTimeout: const Duration(seconds: 10),
+  ));
+  final SecureStorageService _storage = SecureStorageService();
 
   bool _initialized = false;
 
@@ -113,7 +121,12 @@ class PushNotificationService {
       final token = await _fcm.getToken();
       if (token == null) return;
 
-      await _api.delete('/v1/devices/token', data: {'token': token});
+      final authToken = await _storage.readAccessToken();
+      await _dio.delete(
+        '/v1/devices/token',
+        data: {'token': token},
+        options: Options(headers: {'Authorization': 'Bearer $authToken'}),
+      );
       debugPrint('[FCM] Token eliminado del backend.');
     } catch (e) {
       debugPrint('[FCM] Error eliminando token: $e');
@@ -123,10 +136,12 @@ class PushNotificationService {
   Future<void> _registerToken(String token) async {
     try {
       final platform = defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
-      await _api.post('/v1/devices/token', data: {
-        'token': token,
-        'platform': platform,
-      });
+      final authToken = await _storage.readAccessToken();
+      await _dio.post(
+        '/v1/devices/token',
+        data: {'token': token, 'platform': platform},
+        options: Options(headers: {'Authorization': 'Bearer $authToken'}),
+      );
       debugPrint('[FCM] Token registrado en backend: ...${token.substring(token.length - 8)}');
     } catch (e) {
       debugPrint('[FCM] Error registrando token en backend: $e');

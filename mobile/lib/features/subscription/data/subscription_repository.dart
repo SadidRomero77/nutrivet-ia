@@ -73,7 +73,7 @@ class SubscriptionRepository {
 
 @riverpod
 SubscriptionRepository subscriptionRepository(Ref ref) =>
-    SubscriptionRepository(createDio());
+    SubscriptionRepository(ref.watch(apiClientProvider));
 
 @riverpod
 Future<SubscriptionStatus> subscriptionStatus(Ref ref) =>

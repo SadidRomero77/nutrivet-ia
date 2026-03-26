@@ -917,7 +917,7 @@ class _Step3Condition extends StatelessWidget {
 
           // BCS
           Text(
-            'Condición corporal (BCS) — $_bcs/9',
+            'Condición corporal (BCS) — $bcs/9',
             style: theme.textTheme.titleSmall
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
