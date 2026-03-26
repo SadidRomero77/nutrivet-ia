@@ -79,6 +79,9 @@ class UserAccount:
     is_active: bool = True
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    clinic_name: Optional[str] = None
+    specialization: Optional[str] = None
+    license_number: Optional[str] = None
 
     # -- Factory method --
 
@@ -113,6 +116,33 @@ class UserAccount:
         instance.full_name = full_name
         instance.phone = phone
         return instance
+
+    # -- Actualización de perfil --
+
+    def update_profile(
+        self,
+        full_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        clinic_name: Optional[str] = None,
+        specialization: Optional[str] = None,
+        license_number: Optional[str] = None,
+    ) -> None:
+        """
+        Actualiza los campos editables del perfil.
+
+        Solo actualiza los campos que se pasen explícitamente (no-None).
+        El email y el rol son inmutables post-creación.
+        """
+        if full_name is not None:
+            self.full_name = full_name.strip() or None
+        if phone is not None:
+            self.phone = phone.strip() or None
+        if clinic_name is not None:
+            self.clinic_name = clinic_name.strip() or None
+        if specialization is not None:
+            self.specialization = specialization.strip() or None
+        if license_number is not None:
+            self.license_number = license_number.strip() or None
 
     # -- Validación de contraseña --
 

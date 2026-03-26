@@ -57,6 +57,31 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UpdateProfileRequest(BaseModel):
+    """Body del endpoint PATCH /v1/auth/me — actualización parcial de perfil."""
+
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    clinic_name: Optional[str] = None
+    specialization: Optional[str] = None
+    license_number: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """Body del endpoint PATCH /v1/auth/me/password."""
+
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_strength(cls, v: str) -> str:
+        """La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número."""
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+        return v
+
+
 class UserProfileResponse(BaseModel):
     """Respuesta del perfil del usuario autenticado."""
 
@@ -66,3 +91,17 @@ class UserProfileResponse(BaseModel):
     tier: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    clinic_name: Optional[str] = None
+    specialization: Optional[str] = None
+    license_number: Optional[str] = None
+
+
+class UserStatsResponse(BaseModel):
+    """Estadísticas de actividad del usuario autenticado."""
+
+    # Owner
+    pets_count: int = 0
+    active_plans_count: int = 0
+    # Vet
+    patients_count: int = 0
+    pending_plans_count: int = 0

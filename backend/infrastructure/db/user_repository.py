@@ -45,6 +45,9 @@ class PostgreSQLUserRepository(IUserRepository):
                 is_active=user.is_active,
                 full_name=user.full_name,
                 phone=user.phone,
+                clinic_name=user.clinic_name,
+                specialization=user.specialization,
+                license_number=user.license_number,
             )
             self._session.add(model)
         else:
@@ -55,6 +58,9 @@ class PostgreSQLUserRepository(IUserRepository):
             existing.is_active = user.is_active
             existing.full_name = user.full_name
             existing.phone = user.phone
+            existing.clinic_name = user.clinic_name
+            existing.specialization = user.specialization
+            existing.license_number = user.license_number
 
     async def find_by_email(self, email: str) -> Optional[UserAccount]:
         """Busca usuario por email. Retorna None si no existe."""
@@ -84,4 +90,7 @@ class PostgreSQLUserRepository(IUserRepository):
             is_active=model.is_active,
             full_name=model.full_name,
             phone=model.phone,
+            clinic_name=getattr(model, 'clinic_name', None),
+            specialization=getattr(model, 'specialization', None),
+            license_number=getattr(model, 'license_number', None),
         )

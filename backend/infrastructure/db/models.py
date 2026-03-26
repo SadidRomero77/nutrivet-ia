@@ -38,6 +38,9 @@ class UserModel(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     full_name: Mapped[str | None] = mapped_column(String(150), nullable=True, default=None)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True, default=None)
+    clinic_name: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None)
+    specialization: Mapped[str | None] = mapped_column(String(150), nullable=True, default=None)
+    license_number: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

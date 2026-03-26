@@ -24,6 +24,8 @@ import '../../features/vet_dashboard/presentation/vet_patient_profile_screen.dar
 import '../../features/vet_dashboard/presentation/vet_review_plan_screen.dart';
 import '../../features/vet_dashboard/presentation/create_clinic_patient_screen.dart';
 import '../../features/pet/presentation/claim_pet_screen.dart';
+import '../../features/auth/presentation/change_password_screen.dart';
+import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_screen.dart';
 import '../../features/subscription/presentation/subscription_screen.dart';
 import '../storage/secure_storage.dart';
@@ -134,6 +136,14 @@ GoRouter appRouter(Ref ref) {
       GoRoute(
         path: '/profile',
         builder: (_, __) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (_, __) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: '/profile/change-password',
+        builder: (_, __) => const ChangePasswordScreen(),
       ),
       GoRoute(
         path: '/subscription',

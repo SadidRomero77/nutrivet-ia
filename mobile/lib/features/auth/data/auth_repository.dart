@@ -21,6 +21,9 @@ class UserProfile {
     required this.tier,
     this.fullName,
     this.phone,
+    this.clinicName,
+    this.specialization,
+    this.licenseNumber,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -30,6 +33,9 @@ class UserProfile {
         tier: json['tier'] as String,
         fullName: json['full_name'] as String?,
         phone: json['phone'] as String?,
+        clinicName: json['clinic_name'] as String?,
+        specialization: json['specialization'] as String?,
+        licenseNumber: json['license_number'] as String?,
       );
 
   final String userId;
@@ -38,6 +44,31 @@ class UserProfile {
   final String tier;
   final String? fullName;
   final String? phone;
+  final String? clinicName;
+  final String? specialization;
+  final String? licenseNumber;
+}
+
+/// Estadísticas de actividad del usuario autenticado.
+class UserStats {
+  UserStats({
+    this.petsCount = 0,
+    this.activePlansCount = 0,
+    this.patientsCount = 0,
+    this.pendingPlansCount = 0,
+  });
+
+  factory UserStats.fromJson(Map<String, dynamic> json) => UserStats(
+        petsCount: (json['pets_count'] as int?) ?? 0,
+        activePlansCount: (json['active_plans_count'] as int?) ?? 0,
+        patientsCount: (json['patients_count'] as int?) ?? 0,
+        pendingPlansCount: (json['pending_plans_count'] as int?) ?? 0,
+      );
+
+  final int petsCount;
+  final int activePlansCount;
+  final int patientsCount;
+  final int pendingPlansCount;
 }
 
 /// Modelo de respuesta del login/refresh.
@@ -127,6 +158,47 @@ class AuthRepository {
     final response =
         await dio.get<Map<String, dynamic>>('/v1/auth/vet/$vetId/profile');
     return UserProfile.fromJson(response.data!);
+  }
+
+  /// Actualiza nombre, teléfono y/o datos clínicos del usuario.
+  Future<UserProfile> updateProfile({
+    String? fullName,
+    String? phone,
+    String? clinicName,
+    String? specialization,
+    String? licenseNumber,
+  }) async {
+    final response = await dio.patch<Map<String, dynamic>>(
+      '/v1/auth/me',
+      data: {
+        if (fullName != null) 'full_name': fullName,
+        if (phone != null) 'phone': phone,
+        if (clinicName != null) 'clinic_name': clinicName,
+        if (specialization != null) 'specialization': specialization,
+        if (licenseNumber != null) 'license_number': licenseNumber,
+      },
+    );
+    return UserProfile.fromJson(response.data!);
+  }
+
+  /// Cambia la contraseña del usuario autenticado.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await dio.patch<void>(
+      '/v1/auth/me/password',
+      data: {
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      },
+    );
+  }
+
+  /// Estadísticas de actividad del usuario autenticado.
+  Future<UserStats> getMyStats() async {
+    final response = await dio.get<Map<String, dynamic>>('/v1/auth/me/stats');
+    return UserStats.fromJson(response.data!);
   }
 
   /// Cierra sesión y elimina tokens locales.
