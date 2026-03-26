@@ -129,11 +129,23 @@ class TestCheckSafetyPre:
 # ─── Nodo 5: select_llm ───────────────────────────────────────────────────────
 
 class TestSelectLLM:
-    def test_free_tier_sin_condiciones_usa_llama(self) -> None:
-        """FREE tier, 0 condiciones → llama-3.3-70b."""
+    def test_free_tier_sin_condiciones_usa_gpt4o_mini(self) -> None:
+        """FREE tier, 0 condiciones → gpt-4o-mini (no más :free)."""
         state = _state_with_pet(user_tier="FREE", conditions=[])
         result = nodo_5_select_llm(state)
-        assert result["llm_model"] == "meta-llama/llama-3.3-70b-instruct:free"
+        assert result["llm_model"] == "openai/gpt-4o-mini"
+
+    def test_free_tier_1_condicion_gpt4o_mini(self) -> None:
+        """FREE tier, 1 condición → gpt-4o-mini (bajo umbral clínico de 2)."""
+        state = _state_with_pet(user_tier="FREE", conditions=["gastritis"])
+        result = nodo_5_select_llm(state)
+        assert result["llm_model"] == "openai/gpt-4o-mini"
+
+    def test_free_tier_2_condiciones_override_claude(self) -> None:
+        """FREE tier, 2 condiciones → claude-sonnet-4-5 (override umbral=2)."""
+        state = _state_with_pet(user_tier="FREE", conditions=["diabético", "renal"])
+        result = nodo_5_select_llm(state)
+        assert result["llm_model"] == "anthropic/claude-sonnet-4-5"
 
     def test_sally_override_clinico_usa_claude(self) -> None:
         """5 condiciones médicas → claude-sonnet-4-5 (override REGLA 5)."""
@@ -143,13 +155,13 @@ class TestSelectLLM:
                         "cistitis/enfermedad_urinaria", "hipotiroideo"],
         )
         result = nodo_5_select_llm(state)
-        assert result["llm_model"] == "anthropic/claude-sonnet-4.5"
+        assert result["llm_model"] == "anthropic/claude-sonnet-4-5"
 
     def test_premium_tier_usa_claude(self) -> None:
         """PREMIUM tier → claude-sonnet-4-5."""
         state = _state_with_pet(user_tier="PREMIUM", conditions=[])
         result = nodo_5_select_llm(state)
-        assert result["llm_model"] == "anthropic/claude-sonnet-4.5"
+        assert result["llm_model"] == "anthropic/claude-sonnet-4-5"
 
 
 # ─── Nodo 7: validate_output ──────────────────────────────────────────────────
@@ -230,7 +242,7 @@ class TestDetermineHITL:
     def test_plan_acumula_traces_en_state(self) -> None:
         """State preserva agent_traces acumulados."""
         state = _state_with_pet()
-        state["agent_traces"] = [{"llm_model": "meta-llama/llama-3.3-70b-instruct:free", "latency_ms": 1200}]
+        state["agent_traces"] = [{"llm_model": "openai/gpt-4o-mini", "latency_ms": 1200}]
         result = nodo_9_determine_hitl(state)
         assert len(result["agent_traces"]) == 1
 

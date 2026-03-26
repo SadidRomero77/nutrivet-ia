@@ -18,9 +18,10 @@ Piloto inicial: BAMPYSVET, Bogotá — Dr. Andrés como primer veterinario adopt
 - **Base de datos**: PostgreSQL + Alembic (migraciones)
 - **Auth**: JWT (access 15min + refresh rotativo) + RBAC (roles: owner / vet)
 - **LLM Texto + OCR**: OpenRouter (proveedor unificado) — routing por tier + override clínico (ver ADR-019)
-  - Free → `meta-llama/llama-3.3-70b` · Básico → `openai/gpt-4o-mini` · Premium/Vet → `anthropic/claude-sonnet-4-5`
-  - Override: 3+ condiciones médicas → `anthropic/claude-sonnet-4-5` siempre, independiente del tier
-  - OCR → `openai/gpt-4o` (vision) para todos los tiers
+  - Free → `openai/gpt-4o-mini` · Básico → `openai/gpt-4o-mini` · Premium/Vet → `anthropic/claude-sonnet-4-5`
+  - Override: **2+** condiciones médicas → `anthropic/claude-sonnet-4-5` siempre, independiente del tier
+  - OCR → `openai/gpt-4o` (vision) · Query classifier → `openai/gpt-4o-mini`
+  - Sin endpoints `:free` — producción requiere SLA garantizado
 - **Deployment**: Hetzner CPX31 (Ashburn VA) + Coolify — FastAPI en Docker, async jobs con ARQ (ver ADR-022)
 - **Storage**: Cloudflare R2 (S3-compatible — imágenes OCR, PDFs exportados)
 - **CI/CD**: GitHub Actions → Coolify webhook (deploy automático en staging, manual en prod)

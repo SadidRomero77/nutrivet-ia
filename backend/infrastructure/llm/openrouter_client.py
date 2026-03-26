@@ -22,12 +22,10 @@ logger = logging.getLogger(__name__)
 
 
 # Fallback chain si el modelo primario falla (IDs verificados contra OpenRouter API)
+# No se usan endpoints :free — sin SLA, rate limits compartidos entre todos los usuarios.
 _FALLBACK_CHAIN: dict[str, str] = {
-    "anthropic/claude-sonnet-4.5": "openai/gpt-4o-mini",
-    "openai/gpt-4o-mini": "meta-llama/llama-3.3-70b-instruct:free",
-    # :free puede tener rate limit de upstream (429) → fallback a gpt-4o-mini de pago
-    "meta-llama/llama-3.3-70b-instruct:free": "openai/gpt-4o-mini",
-    "meta-llama/llama-3.3-70b-instruct": "openai/gpt-4o-mini",
+    "anthropic/claude-sonnet-4-5": "openai/gpt-4o-mini",
+    # gpt-4o-mini no tiene fallback inferior — es el piso de calidad aceptable
 }
 
 _OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"

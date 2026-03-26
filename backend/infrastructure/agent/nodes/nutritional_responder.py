@@ -71,13 +71,15 @@ async def stream_nutritional_response(
     """
     import httpx
 
-    # Determinar si la mascota tiene condiciones médicas (para routing)
-    has_conditions = bool(
-        pet_profile and pet_profile.get("medical_conditions")
+    # Contar condiciones médicas activas (para routing clínico — umbral 2+)
+    conditions_count = (
+        len(pet_profile.get("medical_conditions", []))
+        if pet_profile
+        else 0
     )
 
-    # Seleccionar modelo según tier + contexto clínico
-    model = select_conversation_model(user_tier=user_tier, has_conditions=has_conditions)
+    # Seleccionar modelo según tier + número de condiciones (REGLA 5)
+    model = select_conversation_model(user_tier=user_tier, conditions_count=conditions_count)
 
     api_key = os.getenv("OPENROUTER_API_KEY", "")
 

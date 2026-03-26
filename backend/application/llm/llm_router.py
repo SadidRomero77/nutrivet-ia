@@ -2,15 +2,17 @@
 LLMRouter — Routing determinístico de modelos LLM por tier y condiciones médicas.
 
 Constitution REGLA 5 (no negociable):
-  Free tier                → meta-llama/llama-3.3-70b-instruct:free
+  Free tier                → openai/gpt-4o-mini
   Básico tier              → openai/gpt-4o-mini
-  Premium / Vet tier       → anthropic/claude-sonnet-4.5
-  3+ condiciones (any tier)→ anthropic/claude-sonnet-4.5  ← override no negociable
+  Premium / Vet tier       → anthropic/claude-sonnet-4-5
+  2+ condiciones (any tier)→ anthropic/claude-sonnet-4-5  ← override no negociable
   OCR (todos los tiers)    → openai/gpt-4o (vision) — ver select_ocr_model()
 
-Nunca llamar LLMs locales (Ollama) para generación de planes — ver ADR-019.
+Sin modelos locales (Ollama) ni endpoints :free — ver ADR-019.
+Umbral clínico en 2 porque 2 condiciones simultáneas (ej: diabetes+renal) implica
+restricciones contradictorias que requieren el modelo de mayor capacidad.
 
-IDs verificados contra OpenRouter API (2026-03-21).
+IDs verificados contra OpenRouter API (2026-03-25).
 """
 from __future__ import annotations
 
@@ -18,15 +20,17 @@ from backend.domain.aggregates.user_account import UserTier
 
 # Modelos por tier (proveedor: OpenRouter) — IDs exactos verificados
 _MODEL_BY_TIER: dict[UserTier, str] = {
-    UserTier.FREE: "meta-llama/llama-3.3-70b-instruct:free",
-    UserTier.BASICO: "openai/gpt-4o-mini",
-    UserTier.PREMIUM: "anthropic/claude-sonnet-4.5",
-    UserTier.VET: "anthropic/claude-sonnet-4.5",
+    UserTier.FREE:    "openai/gpt-4o-mini",
+    UserTier.BASICO:  "openai/gpt-4o-mini",
+    UserTier.PREMIUM: "anthropic/claude-sonnet-4-5",
+    UserTier.VET:     "anthropic/claude-sonnet-4-5",
 }
 
-# Override clínico: 3+ condiciones médicas → modelo máximo
-_CLINICAL_OVERRIDE_MODEL = "anthropic/claude-sonnet-4.5"
-_CLINICAL_OVERRIDE_THRESHOLD = 3
+# Override clínico: 2+ condiciones médicas → modelo máximo (bajado de 3 a 2)
+# 2 condiciones simultáneas (diabetes+renal, hepático+pancreático) son clínicamente
+# complejas — restricciones contradictorias requieren razonamiento superior.
+_CLINICAL_OVERRIDE_MODEL = "anthropic/claude-sonnet-4-5"
+_CLINICAL_OVERRIDE_THRESHOLD = 2
 
 # Modelo OCR (siempre, independiente del tier)
 _OCR_MODEL = "openai/gpt-4o"

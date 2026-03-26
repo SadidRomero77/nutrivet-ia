@@ -406,22 +406,34 @@ class TestConversationPrompts:
 
     def test_model_selection_vet_siempre_claude(self) -> None:
         """Tier VET siempre usa claude-sonnet-4-5."""
-        assert select_conversation_model("VET", False) == "anthropic/claude-sonnet-4-5"
-        assert select_conversation_model("VET", True) == "anthropic/claude-sonnet-4-5"
+        assert select_conversation_model("VET", conditions_count=0) == "anthropic/claude-sonnet-4-5"
+        assert select_conversation_model("VET", conditions_count=3) == "anthropic/claude-sonnet-4-5"
 
-    def test_model_selection_free_sin_condicion_llama(self) -> None:
-        """FREE sin condiciones → llama (más económico)."""
-        model = select_conversation_model("FREE", False)
-        assert model == "meta-llama/llama-3.3-70b-instruct"
+    def test_model_selection_free_sin_condicion_gpt4o_mini(self) -> None:
+        """FREE sin condiciones → gpt-4o-mini (no más llama)."""
+        model = select_conversation_model("FREE", conditions_count=0)
+        assert model == "openai/gpt-4o-mini"
 
-    def test_model_selection_free_con_condicion_escala(self) -> None:
-        """FREE con condición → modelo más capaz para contexto clínico."""
-        model = select_conversation_model("FREE", True)
-        assert model != "meta-llama/llama-3.3-70b-instruct"  # sube al menos un nivel
+    def test_model_selection_free_1_condicion_gpt4o_mini(self) -> None:
+        """FREE + 1 condición → gpt-4o-mini (bajo umbral clínico de 2)."""
+        model = select_conversation_model("FREE", conditions_count=1)
+        assert model == "openai/gpt-4o-mini"
+
+    def test_model_selection_free_2_condiciones_override_claude(self) -> None:
+        """FREE + 2 condiciones → claude-sonnet-4-5 (override umbral=2)."""
+        model = select_conversation_model("FREE", conditions_count=2)
+        assert model == "anthropic/claude-sonnet-4-5"
+
+    def test_model_selection_sin_endpoint_free(self) -> None:
+        """Ningún tier retorna endpoint :free."""
+        for tier in ["FREE", "BASICO", "PREMIUM", "VET"]:
+            for cond in [0, 1, 2, 5]:
+                model = select_conversation_model(tier, conditions_count=cond)
+                assert ":free" not in model
 
     def test_model_selection_premium_claude(self) -> None:
         """PREMIUM → claude-sonnet-4-5."""
-        assert select_conversation_model("PREMIUM", False) == "anthropic/claude-sonnet-4-5"
+        assert select_conversation_model("PREMIUM", conditions_count=0) == "anthropic/claude-sonnet-4-5"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

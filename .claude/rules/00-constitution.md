@@ -55,18 +55,23 @@ El cálculo calórico **NUNCA** lo hace el LLM. Es Python puro en `domain/nutrit
 
 ## REGLA 5 — LLM Routing Por Tier + Override Clínico (BLOQUEANTE)
 
-Proveedor unificado: **OpenRouter**. Routing por tier de suscripción con override por complejidad clínica.
+Proveedor unificado: **OpenRouter**. Sin endpoints `:free` — sin SLA, rate limits compartidos.
+Routing por tier de suscripción con override por complejidad clínica.
 
 ```
-Free tier                → meta-llama/llama-3.3-70b
+Free tier                → openai/gpt-4o-mini
 Básico tier              → openai/gpt-4o-mini
 Premium / Vet tier       → anthropic/claude-sonnet-4-5
-3+ condiciones (any tier)→ anthropic/claude-sonnet-4-5  ← override no negociable
+2+ condiciones (any tier)→ anthropic/claude-sonnet-4-5  ← override no negociable
 OCR (todos los tiers)    → openai/gpt-4o (vision)
+Query classifier         → openai/gpt-4o-mini  (clasificación de seguridad crítica)
 ```
 
-**Nunca** usar un modelo inferior para casos con 3+ condiciones médicas, independientemente del tier.
-**Nunca** usar modelos locales (Ollama) para generación de planes o OCR — ver ADR-019.
+**Umbral 2 (no 3)**: 2 condiciones simultáneas (ej: diabetes+renal) implican restricciones
+contradictorias que requieren el modelo de mayor capacidad de razonamiento clínico.
+
+**Nunca** usar un modelo inferior para casos con 2+ condiciones médicas, independientemente del tier.
+**Nunca** usar modelos locales (Ollama) ni endpoints `:free` para generación de planes o OCR.
 
 ---
 

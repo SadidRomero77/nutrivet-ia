@@ -395,22 +395,25 @@ def build_conversation_system_prompt(
     return "".join(parts)
 
 
-def select_conversation_model(user_tier: str, has_conditions: bool) -> str:
+def select_conversation_model(user_tier: str, conditions_count: int = 0) -> str:
     """
-    Selecciona el modelo LLM para conversación según tier y contexto clínico.
+    Selecciona el modelo LLM para conversación según tier y número de condiciones.
 
-    Constitution REGLA 5: 3+ condiciones siempre → claude-sonnet-4-5.
-    Para conversación, 1+ condición es suficiente para modelo intermedio.
+    Constitution REGLA 5: 2+ condiciones (any tier) → claude-sonnet-4-5.
+    Alineado con LLMRouter.select_model() — mismo umbral para plan y chat.
+
+    Args:
+        user_tier: Tier del usuario ("FREE", "BASICO", "PREMIUM", "VET").
+        conditions_count: Número de condiciones médicas activas de la mascota.
     """
     tier = user_tier.upper()
 
+    # Override clínico: 2+ condiciones siempre requieren el mejor modelo (REGLA 5)
+    if conditions_count >= 2:
+        return "anthropic/claude-sonnet-4-5"
+
     if tier in ("PREMIUM", "VET"):
         return "anthropic/claude-sonnet-4-5"
-    elif tier == "BASICO":
-        if has_conditions:
-            return "anthropic/claude-sonnet-4-5"
-        return "openai/gpt-4o-mini"
-    else:  # FREE
-        if has_conditions:
-            return "openai/gpt-4o-mini"
-        return "meta-llama/llama-3.3-70b-instruct"
+
+    # FREE y BASICO sin complejidad clínica alta
+    return "openai/gpt-4o-mini"

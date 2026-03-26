@@ -37,7 +37,9 @@ async def _call_classifier_llm(message: str, llm_client=None) -> str:
     """
     Llama al LLM para clasificar la consulta.
 
-    Usa llama-3.3-70b (tier Free) — consulta de clasificación, no de generación.
+    Usa gpt-4o-mini — clasificación binaria de seguridad crítica (REGLA 9).
+    gpt-4o-mini garantiza mayor fiabilidad en seguimiento de formato que llama
+    para una decisión donde un falso negativo (MEDICAL→NUTRITIONAL) es peligroso.
     Retorna INTENT_NUTRITIONAL o INTENT_MEDICAL.
     Raises: Exception si el LLM falla (manejado en classify_query).
     """
@@ -46,7 +48,7 @@ async def _call_classifier_llm(message: str, llm_client=None) -> str:
     import httpx
 
     api_key = os.getenv("OPENROUTER_API_KEY", "")
-    model = "meta-llama/llama-3.3-70b-instruct"
+    model = "openai/gpt-4o-mini"
 
     # Serializar el mensaje en JSON para delimitar el input del usuario
     # y prevenir inyección de instrucciones (OWASP LLM01 / AA01)
