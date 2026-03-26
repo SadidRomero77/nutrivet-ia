@@ -361,6 +361,25 @@ class AppDrawer extends ConsumerWidget {
             ),
           ),
 
+          // ── Soporte y legal ──────────────────────────────────────────────
+          const Divider(height: 1),
+          _DrawerItem(
+            icon: Icons.help_outline,
+            title: 'Soporte y ayuda',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/support');
+            },
+          ),
+          _DrawerItem(
+            icon: Icons.description_outlined,
+            title: 'Términos y privacidad',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/terms');
+            },
+          ),
+
           // ── Cerrar sesión al fondo ────────────────────────────────────────
           const Divider(height: 1),
           _DrawerItem(

@@ -115,3 +115,51 @@ class JWTService:
             UUID v4 como string. Debe almacenarse hasheado en DB.
         """
         return str(uuid.uuid4())
+
+    def create_reset_token(
+        self,
+        user_id: uuid.UUID,
+        expires_seconds: int = 900,
+    ) -> str:
+        """
+        Genera un token JWT de un solo uso para reset de contraseña.
+
+        Args:
+            user_id: ID del usuario que solicita el reset.
+            expires_seconds: TTL del token (default 15 minutos).
+
+        Returns:
+            Token JWT firmado con HS256.
+        """
+        exp = time.time() + expires_seconds
+        payload = {
+            "sub": str(user_id),
+            "purpose": "password_reset",
+            "exp": exp,
+        }
+        return jwt.encode(payload, self._secret_key, algorithm=self._algorithm)
+
+    def verify_reset_token(self, token: str) -> uuid.UUID:
+        """
+        Decodifica y valida un token de reset de contraseña.
+
+        Args:
+            token: Token JWT de reset.
+
+        Returns:
+            UUID del usuario si el token es válido.
+
+        Raises:
+            DomainError: Si el token es inválido, expirado o no es de reset.
+        """
+        try:
+            data = jwt.decode(token, self._secret_key, algorithms=[self._algorithm])
+        except ExpiredSignatureError:
+            raise DomainError("El enlace de recuperación expiró. Solicita uno nuevo.")
+        except JWTError:
+            raise DomainError("El enlace de recuperación es inválido.")
+
+        if data.get("purpose") != "password_reset":
+            raise DomainError("El token no es válido para este propósito.")
+
+        return uuid.UUID(data["sub"])

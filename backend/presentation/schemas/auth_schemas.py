@@ -171,6 +171,37 @@ class AdminOverviewStats(BaseModel):
     total_revenue_cop: float = 0.0
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Body del endpoint POST /v1/auth/forgot-password."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Body del endpoint POST /v1/auth/reset-password."""
+
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_strength(cls, v: str) -> str:
+        """Mínimo 8 caracteres."""
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+        return v
+
+
+class TierUsageResponse(BaseModel):
+    """Cuota de uso del tier actual del usuario."""
+
+    tier: str
+    plans_total: int = 0
+    plans_limit: Optional[int] = None    # None = ilimitado
+    plans_remaining: Optional[int] = None
+    can_generate_plan: bool = True
+
+
 class PaymentHistoryItem(BaseModel):
     """Un registro de pago en el historial."""
 

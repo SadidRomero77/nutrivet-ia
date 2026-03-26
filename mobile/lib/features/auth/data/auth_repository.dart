@@ -75,6 +75,33 @@ class UserStats {
   final int pendingPlansCount;
 }
 
+/// Cuota de uso del tier actual del usuario.
+class TierUsage {
+  TierUsage({
+    required this.tier,
+    this.plansTotal = 0,
+    this.plansLimit,
+    this.plansRemaining,
+    this.canGeneratePlan = true,
+  });
+
+  factory TierUsage.fromJson(Map<String, dynamic> json) => TierUsage(
+        tier: json['tier'] as String,
+        plansTotal: (json['plans_total'] as int?) ?? 0,
+        plansLimit: json['plans_limit'] as int?,
+        plansRemaining: json['plans_remaining'] as int?,
+        canGeneratePlan: (json['can_generate_plan'] as bool?) ?? true,
+      );
+
+  final String tier;
+  final int plansTotal;
+  final int? plansLimit;
+  final int? plansRemaining;
+  final bool canGeneratePlan;
+
+  bool get isUnlimited => plansLimit == null;
+}
+
 /// Modelo de respuesta del login/refresh.
 class AuthTokens {
   AuthTokens({required this.accessToken, required this.refreshToken});
@@ -203,6 +230,32 @@ class AuthRepository {
   Future<UserStats> getMyStats() async {
     final response = await dio.get<Map<String, dynamic>>('/v1/auth/me/stats');
     return UserStats.fromJson(response.data!);
+  }
+
+  /// Solicita recuperación de contraseña por email.
+  Future<void> forgotPassword(String email) async {
+    await dio.post<void>(
+      '/v1/auth/forgot-password',
+      data: {'email': email},
+    );
+  }
+
+  /// Restablece contraseña con token de recuperación.
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    await dio.post<void>(
+      '/v1/auth/reset-password',
+      data: {'token': token, 'new_password': newPassword},
+    );
+  }
+
+  /// Cuota de uso del tier actual.
+  Future<TierUsage> getTierUsage() async {
+    final response =
+        await dio.get<Map<String, dynamic>>('/v1/auth/me/tier-usage');
+    return TierUsage.fromJson(response.data!);
   }
 
   /// Cierra sesión y elimina tokens locales.

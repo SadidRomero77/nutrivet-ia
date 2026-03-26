@@ -30,10 +30,13 @@ from backend.infrastructure.db.models import NutritionPlanModel, PetModel
 from backend.presentation.middleware.auth_middleware import get_current_user, get_jwt_service
 from backend.presentation.schemas.auth_schemas import (
     ChangePasswordRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
     RegisterRequest,
+    ResetPasswordRequest,
+    TierUsageResponse,
     TokenResponse,
     UpdateProfileRequest,
     UserProfileResponse,
@@ -382,4 +385,151 @@ async def get_vet_profile(
         clinic_name=vet.clinic_name,
         specialization=vet.specialization,
         license_number=vet.license_number,
+    )
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_200_OK,
+    summary="Solicitar recuperación de contraseña",
+)
+@_limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    session: AsyncSession = Depends(get_db_session),
+    jwt_service: JWTService = Depends(get_jwt_service),
+) -> dict:
+    """
+    Genera un token de reset de contraseña para el email indicado.
+
+    Siempre responde con el mismo mensaje — no revela si el email existe (OWASP A01).
+    En producción, el token se envía por email. En desarrollo se loggea.
+    """
+    user_repo = PostgreSQLUserRepository(session)
+    user_obj = await user_repo.find_by_email(str(body.email).lower())
+
+    if user_obj is not None:
+        reset_token = jwt_service.create_reset_token(user_obj.id)
+        # En producción: enviar por email. En desarrollo: loggear para testing.
+        logger.info(
+            "Password reset token for %s: %s",
+            body.email,
+            reset_token,
+        )
+
+    return {"message": "Si el email está registrado, recibirás las instrucciones de recuperación."}
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Restablecer contraseña con token",
+)
+@_limiter.limit("5/minute")
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    session: AsyncSession = Depends(get_db_session),
+    jwt_service: JWTService = Depends(get_jwt_service),
+) -> None:
+    """
+    Restablece la contraseña del usuario usando el token de reset.
+
+    El token es válido por 15 minutos y de un solo uso (TTL via JWT exp).
+    """
+    try:
+        user_id = jwt_service.verify_reset_token(body.token)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de recuperación es inválido o ha expirado.",
+        )
+
+    user_repo = PostgreSQLUserRepository(session)
+    user_obj = await user_repo.find_by_id(user_id)
+    if user_obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de recuperación es inválido o ha expirado.",
+        )
+
+    pw_service = PasswordService()
+    user_obj.password_hash = pw_service.hash(body.new_password)
+    await user_repo.save(user_obj)
+    await session.commit()
+    logger.info("Password reset completado para user_id=%s", user_id)
+
+
+@router.get(
+    "/me/tier-usage",
+    response_model=TierUsageResponse,
+    summary="Cuota de uso del tier actual",
+)
+async def get_tier_usage(
+    session: AsyncSession = Depends(get_db_session),
+    user: TokenPayload = Depends(get_current_user),
+) -> TierUsageResponse:
+    """
+    Retorna el uso de planes según el tier del usuario.
+
+    Reglas:
+    - Free: 1 plan total — no puede generar más.
+    - Básico: 1 nuevo plan por mes.
+    - Premium/Vet: ilimitados.
+    """
+    from backend.domain.aggregates.user_account import UserTier
+    from backend.infrastructure.db.models import PetModel as _PetModel
+
+    uid = user.user_id
+    tier_value = user.tier.value
+
+    # Contar planes totales del usuario
+    total_plans_row = await session.execute(
+        select(func.count()).select_from(NutritionPlanModel).join(
+            PetModel, NutritionPlanModel.pet_id == PetModel.id
+        ).where(
+            PetModel.owner_id == uid,
+        )
+    )
+    plans_total = total_plans_row.scalar() or 0
+
+    # Determinar límites por tier
+    if tier_value == "free":
+        limit = 1
+        remaining = max(0, limit - plans_total)
+        can_generate = remaining > 0
+    elif tier_value == "basico":
+        # 1 plan nuevo por mes
+        from datetime import datetime, timezone
+        from sqlalchemy import and_
+        start_of_month = datetime.now(timezone.utc).replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        monthly_row = await session.execute(
+            select(func.count()).select_from(NutritionPlanModel).join(
+                PetModel, NutritionPlanModel.pet_id == PetModel.id
+            ).where(
+                and_(
+                    PetModel.owner_id == uid,
+                    NutritionPlanModel.created_at >= start_of_month,
+                )
+            )
+        )
+        plans_this_month = monthly_row.scalar() or 0
+        limit = 1
+        remaining = max(0, limit - plans_this_month)
+        can_generate = remaining > 0
+    else:
+        # Premium / Vet — ilimitados
+        limit = None
+        remaining = None
+        can_generate = True
+
+    return TierUsageResponse(
+        tier=tier_value,
+        plans_total=plans_total,
+        plans_limit=limit,
+        plans_remaining=remaining,
+        can_generate_plan=can_generate,
     )

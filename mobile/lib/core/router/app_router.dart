@@ -29,6 +29,11 @@ import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_screen.dart';
 import '../../features/subscription/presentation/subscription_screen.dart';
 import '../../features/subscription/presentation/payment_history_screen.dart';
+import '../../features/subscription/presentation/upgrade_paywall_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
+import '../../features/auth/presentation/reset_password_screen.dart';
+import '../../features/support/presentation/support_screen.dart';
+import '../../features/support/presentation/terms_screen.dart';
 import '../../features/admin/presentation/admin_dashboard_screen.dart';
 import '../../features/admin/presentation/admin_user_list_screen.dart';
 import '../../features/admin/presentation/admin_user_detail_screen.dart';
@@ -50,7 +55,10 @@ GoRouter appRouter(Ref ref) {
       final loc = state.matchedLocation;
       final isAuthRoute = loc == '/login' ||
           loc == '/register' ||
-          loc == '/splash';
+          loc == '/splash' ||
+          loc == '/forgot-password' ||
+          loc == '/reset-password' ||
+          loc == '/terms';
 
       if (!hasTokens && !isAuthRoute) return '/login';
 
@@ -93,6 +101,30 @@ GoRouter appRouter(Ref ref) {
       GoRoute(
         path: '/register',
         builder: (_, __) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (_, __) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (_, __) => const ResetPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/upgrade',
+        builder: (_, state) => UpgradePaywallScreen(
+          reason: state.uri.queryParameters['reason'],
+        ),
+      ),
+      GoRoute(
+        path: '/support',
+        builder: (_, __) => const SupportScreen(),
+      ),
+      GoRoute(
+        path: '/terms',
+        builder: (_, state) => TermsScreen(
+          initialTab: state.uri.queryParameters['tab'],
+        ),
       ),
       GoRoute(
         path: '/dashboard',

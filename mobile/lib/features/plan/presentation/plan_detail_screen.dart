@@ -13,6 +13,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/app_footer.dart';
 import '../data/plan_repository.dart';
+import '../../auth/data/auth_repository.dart';
 
 part 'plan_detail_screen.g.dart';
 
@@ -91,7 +92,7 @@ class _PlanContent extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             // Estado del plan
-            _StatusBanner(status: plan.status),
+            _StatusBanner(status: plan.status, reviewDate: plan.reviewDate),
             // Comentario del vet si el plan fue devuelto (UNDER_REVIEW)
             if (plan.vetComment != null && plan.vetComment!.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -1041,9 +1042,10 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.status});
+  const _StatusBanner({required this.status, this.reviewDate});
 
   final String status;
+  final DateTime? reviewDate;
 
   @override
   Widget build(BuildContext context) {
@@ -1087,6 +1089,25 @@ class _StatusBanner extends StatelessWidget {
                 if (subtitle != null) ...[
                   const SizedBox(height: 4),
                   Text(subtitle, style: TextStyle(color: color.withOpacity(0.8), fontSize: 12)),
+                ],
+                if (status == 'ACTIVE' && reviewDate != null) ...[
+                  const SizedBox(height: 4),
+                  Builder(builder: (context) {
+                    final now = DateTime.now();
+                    final diff = reviewDate!.difference(now);
+                    final daysLeft = diff.inDays;
+                    final reviewText = daysLeft > 0
+                        ? 'Revisión veterinaria programada en $daysLeft día${daysLeft == 1 ? '' : 's'}'
+                        : 'Revisión veterinaria vencida — contacta a tu vet';
+                    return Text(
+                      reviewText,
+                      style: TextStyle(
+                        color: (daysLeft > 3 ? Colors.green : Colors.orange).withOpacity(0.9),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  }),
                 ],
               ],
             ),
@@ -1194,6 +1215,9 @@ class _PlanSection extends StatelessWidget {
   }
 }
 
+// Alias para acceder a authRepositoryProvider desde este archivo
+final _authRepoProvider = authRepositoryProvider;
+
 /// Pantalla para generar un plan con polling automático y progreso visual.
 class GeneratePlanScreen extends ConsumerStatefulWidget {
   const GeneratePlanScreen(
@@ -1209,6 +1233,8 @@ class GeneratePlanScreen extends ConsumerStatefulWidget {
 class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
   String _modality = 'natural';
   bool _loading = false;
+  bool _checkingQuota = true;
+  bool _canGenerate = true;
   String? _jobId;
   String? _errorMsg;
   int _currentStep = 0; // 0=idle, 1=encolando, 2=calculando, 3=generando, 4=verificando
@@ -1219,6 +1245,29 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
     (Icons.auto_awesome, 'Generando plan con IA'),
     (Icons.shield_outlined, 'Verificando seguridad nutricional'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkQuota();
+  }
+
+  Future<void> _checkQuota() async {
+    try {
+      // Import is via auth_repository.dart — need to access it from plan context
+      // We use the auth repo through the ref
+      final authRepo = ref.read(_authRepoProvider);
+      final usage = await authRepo.getTierUsage();
+      if (mounted) {
+        setState(() {
+          _canGenerate = usage.canGeneratePlan;
+          _checkingQuota = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _checkingQuota = false);
+    }
+  }
 
   Future<void> _generate() async {
     setState(() {
@@ -1297,6 +1346,57 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (_checkingQuota) {
+      return Scaffold(
+        appBar: AppBar(title: NutrivetTitle('Generar plan — ${widget.petName}')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_canGenerate) {
+      return Scaffold(
+        appBar: AppBar(title: NutrivetTitle('Generar plan — ${widget.petName}')),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Text('📋', style: TextStyle(fontSize: 52)),
+              const SizedBox(height: 16),
+              Text(
+                'Límite del plan gratuito alcanzado',
+                style: theme.textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Con el plan Free puedes generar 1 plan nutricional. '
+                'Actualiza para generar planes ilimitados.',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.outline),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => context.push('/upgrade?reason=plan_limit'),
+                  child: const Text('Ver planes de suscripción'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('Volver'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
