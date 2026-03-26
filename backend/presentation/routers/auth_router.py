@@ -222,6 +222,7 @@ async def get_me(
         clinic_name=user_obj.clinic_name,
         specialization=user_obj.specialization,
         license_number=user_obj.license_number,
+        vet_status=user_obj.vet_status,
     )
 
 
@@ -261,6 +262,7 @@ async def update_me(
         clinic_name=user_obj.clinic_name,
         specialization=user_obj.specialization,
         license_number=user_obj.license_number,
+        vet_status=user_obj.vet_status,
     )
 
 
@@ -385,6 +387,7 @@ async def get_vet_profile(
         clinic_name=vet.clinic_name,
         specialization=vet.specialization,
         license_number=vet.license_number,
+        vet_status=vet.vet_status,
     )
 
 

@@ -98,6 +98,7 @@ class UserProfileResponse(BaseModel):
     clinic_name: Optional[str] = None
     specialization: Optional[str] = None
     license_number: Optional[str] = None
+    vet_status: Optional[str] = None  # pending | approved — solo para rol vet
 
 
 class UserStatsResponse(BaseModel):
