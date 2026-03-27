@@ -8,8 +8,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,8 +44,8 @@ from backend.presentation.schemas.auth_schemas import (
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
-# Rate limiter — previene brute force en endpoints de autenticación
-_limiter = Limiter(key_func=get_remote_address)
+# Rate limiter — instancia compartida (misma que app.state.limiter)
+from backend.presentation.rate_limiter import limiter as _limiter
 
 
 def _build_use_case(
@@ -68,7 +67,7 @@ def _build_use_case(
     status_code=status.HTTP_201_CREATED,
     summary="Registrar nuevo usuario",
 )
-@_limiter.limit("5/minute")  # Previene enumeración masiva de emails
+@_limiter.limit("20/minute")  # Límite generoso para testing — ajustar a 5/minute en producción
 async def register(
     request: Request,
     body: RegisterRequest,
@@ -82,18 +81,25 @@ async def register(
     - **password**: Mínimo 8 caracteres, una mayúscula y un número.
     - **role**: `owner` (propietario de mascota) o `vet` (veterinario).
     """
+    logger.info("Intento de registro desde IP: %s", request.client.host if request.client else "unknown")
     try:
         uc = _build_use_case(session, jwt_service)
         from backend.domain.aggregates.user_account import UserRole as _UserRole
+        # El schema ya validó que role es 'owner' o 'vet' (normalizado a minúsculas).
+        # Cualquier valor distinto fue rechazado con 422 antes de llegar aquí.
+        role_str = (body.role or "owner").lower()
+        requested_role = _UserRole.VET if role_str == "vet" else _UserRole.OWNER
         result: UseCaseTokenResponse = await uc.register(
             email=str(body.email),
             password=body.password,
-            role=_UserRole.OWNER,  # El registro público SIEMPRE crea owners — vets via admin
+            role=requested_role,
             full_name=body.full_name,
             phone=body.phone,
         )
     except DomainError as exc:
-        logger.info("Registro rechazado: %s", type(exc).__name__)
+        # En este punto la contraseña ya fue validada por Pydantic (schema).
+        # El único DomainError que puede llegar aquí es email duplicado.
+        logger.info("Registro rechazado — email duplicado: %s", str(body.email))
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="El email ya está registrado. Intenta con otro o inicia sesión.",
@@ -289,13 +295,13 @@ async def change_password(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
 
     pw_service = PasswordService()
-    if not pw_service.verify(body.current_password, user_obj.password_hash):
+    if not pw_service.verify_password(body.current_password, user_obj.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La contraseña actual no es correcta.",
         )
 
-    user_obj.password_hash = pw_service.hash(body.new_password)
+    user_obj.password_hash = pw_service.hash_password(body.new_password)
     await user_repo.save(user_obj)
     await session.commit()
 
@@ -458,7 +464,7 @@ async def reset_password(
         )
 
     pw_service = PasswordService()
-    user_obj.password_hash = pw_service.hash(body.new_password)
+    user_obj.password_hash = pw_service.hash_password(body.new_password)
     await user_repo.save(user_obj)
     await session.commit()
     logger.info("Password reset completado para user_id=%s", user_id)

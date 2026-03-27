@@ -1,6 +1,7 @@
 /// Pantalla de inicio de sesión.
 library;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +24,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _loading = false;
   bool _obscurePass = true;
   String? _error;
+  // Guard contra doble-submit: isométrico al flag _loading pero se setea
+  // de forma síncrona ANTES del setState para evitar race entre taps rápidos.
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -32,24 +36,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Guard síncrono: previene doble submit antes de que setState reconstruya el botón
+    if (_submitting) return;
+    _submitting = true;
+
+    if (!_formKey.currentState!.validate()) {
+      _submitting = false;
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
     });
+
+    String role;
     try {
-      final role = await ref.read(authRepositoryProvider).login(
+      role = await ref.read(authRepositoryProvider).login(
             email: _emailCtrl.text.trim(),
             password: _passCtrl.text,
           );
-      if (mounted) {
-        context.go(role == 'vet' ? '/vet/dashboard' : '/dashboard');
-      }
     } catch (e) {
-      setState(() => _error = 'Email o contraseña incorrectos.');
-    } finally {
+      String msg;
+      if (e is DioException && e.response?.statusCode == 401) {
+        msg = 'Email o contraseña incorrectos.';
+      } else if (e is DioException &&
+          (e.type == DioExceptionType.connectionError ||
+              e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.unknown)) {
+        msg = 'Sin conexión. Verifica tu red e intenta de nuevo.';
+      } else {
+        msg = 'Error al iniciar sesión. Intenta de nuevo.';
+      }
+      if (mounted) setState(() => _error = msg);
       if (mounted) setState(() => _loading = false);
+      _submitting = false;
+      return;
     }
+
+    _submitting = false;
+    // Navegación fuera del try: si context.go() falla, no se muestra error de credenciales
+    if (mounted) context.go(role == 'vet' ? '/vet/dashboard' : '/dashboard');
+    if (mounted) setState(() => _loading = false);
   }
 
   @override

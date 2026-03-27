@@ -16,21 +16,46 @@ class RegisterRequest(BaseModel):
     """
     Body del endpoint POST /v1/auth/register.
 
-    El registro público crea SOLO cuentas de tipo owner.
-    Los vets y admins se crean exclusivamente via /v1/admin/users/create-vet.
+    Soporta registro de owner y vet. Los admins se crean exclusivamente via DB/admin panel.
+    Los vets se auto-aprueban en MVP (vet_status='approved' directo) — no requieren aprobación manual.
+
+    Roles válidos: 'owner' (propietario de mascota) | 'vet' (veterinario).
+    Cualquier valor distinto se rechaza con 422.
     """
 
     email: EmailStr
     password: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    role: Optional[str] = "owner"  # 'owner' | 'vet' — default owner
+
+    @field_validator("role")
+    @classmethod
+    def role_must_be_user_role(cls, v: Optional[str]) -> Optional[str]:
+        """Solo owner y vet pueden registrarse. Los admins se crean via panel admin."""
+        if v is None:
+            return "owner"
+        normalized = v.lower().strip()
+        if normalized not in ("owner", "vet"):
+            raise ValueError(
+                "Rol inválido. Usa 'owner' (propietario) o 'vet' (veterinario). "
+                "Los administradores se crean exclusivamente desde el panel de administración."
+            )
+        return normalized
 
     @field_validator("password")
     @classmethod
-    def password_min_length(cls, v: str) -> str:
-        """La contraseña debe tener al menos 8 caracteres."""
+    def password_strength(cls, v: str) -> str:
+        """
+        Valida que la contraseña cumpla los requisitos mínimos de seguridad.
+        Mínimo 8 caracteres, al menos una mayúscula y al menos un número.
+        """
         if len(v) < 8:
             raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+        if not any(c.isupper() for c in v):
+            raise ValueError("La contraseña debe contener al menos una letra mayúscula.")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("La contraseña debe contener al menos un número.")
         return v
 
 

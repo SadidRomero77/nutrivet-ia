@@ -1,6 +1,7 @@
 /// Pantalla de registro de nuevo usuario (owner o veterinario).
 library;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,10 +23,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  String _role = 'owner';
   bool _loading = false;
   bool _obscurePass = true;
   String? _error;
+  String _selectedRole = 'owner';
 
   @override
   void dispose() {
@@ -34,6 +35,32 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
+  }
+
+  String _friendlyError(Object e) {
+    if (e is DioException) {
+      final statusCode = e.response?.statusCode;
+      final data = e.response?.data;
+      if (statusCode == 429) {
+        return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+      }
+      if (statusCode == 409) return 'Este correo ya está registrado. Inicia sesión o usa otro.';
+      if (data is Map) {
+        // FastAPI detail string
+        final detail = data['detail'];
+        if (detail is String) return detail;
+        // FastAPI 422 validation errors list
+        if (detail is List && detail.isNotEmpty) {
+          final first = detail.first;
+          if (first is Map) return first['msg'] as String? ?? 'Error de validación';
+        }
+      }
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.connectionError) {
+        return 'Sin conexión. Verifica tu internet e inténtalo de nuevo.';
+      }
+    }
+    return 'Ocurrió un error. Inténtalo de nuevo.';
   }
 
   Future<void> _submit() async {
@@ -48,13 +75,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             password: _passCtrl.text,
             fullName: _nameCtrl.text.trim(),
             phone: _phoneCtrl.text.trim(),
-            role: _role,
+            role: _selectedRole,
           );
       if (mounted) {
         context.go(role == 'vet' ? '/vet/dashboard' : '/dashboard');
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -76,52 +103,50 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: ListView(
               children: [
                 const SizedBox(height: 16),
-                // Selector de rol
-                Card(
-                  margin: EdgeInsets.zero,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '¿Cómo vas a usar NutriVet.IA?',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _RoleOption(
-                                key: const ValueKey('role_owner'),
-                                icon: Icons.pets,
-                                label: 'Propietario',
-                                subtitle: 'Tengo una mascota',
-                                selected: _role == 'owner',
-                                onTap: () => setState(() => _role = 'owner'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _RoleOption(
-                                key: const ValueKey('role_vet'),
-                                icon: Icons.local_hospital_outlined,
-                                label: 'Veterinario',
-                                subtitle: 'Soy médico vet.',
-                                selected: _role == 'vet',
-                                onTap: () => setState(() => _role = 'vet'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+
+                // ── Selector de rol (primero para que sea lo primero que ve el usuario)
+                Text(
+                  'Soy...',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _RoleCard(
+                        icon: Icons.pets,
+                        label: 'Propietario',
+                        subtitle: 'Tengo mascotas',
+                        selected: _selectedRole == 'owner',
+                        onTap: () => setState(() => _selectedRole = 'owner'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _RoleCard(
+                        icon: Icons.medical_services_outlined,
+                        label: 'Veterinario',
+                        subtitle: 'Soy profesional',
+                        selected: _selectedRole == 'vet',
+                        onTap: () => setState(() => _selectedRole = 'vet'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_selectedRole == 'vet') ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Accederás directamente al panel de veterinario.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
 
+                // ── Campos del formulario ──────────────────────────────────
                 TextFormField(
                   key: const ValueKey('name_field'),
                   controller: _nameCtrl,
@@ -223,9 +248,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 }
 
-class _RoleOption extends StatelessWidget {
-  const _RoleOption({
-    super.key,
+class _RoleCard extends StatelessWidget {
+  const _RoleCard({
     required this.icon,
     required this.label,
     required this.subtitle,
@@ -244,34 +268,40 @@ class _RoleOption extends StatelessWidget {
     final theme = Theme.of(context);
     final color = selected ? theme.colorScheme.primary : theme.colorScheme.outline;
 
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
         decoration: BoxDecoration(
+          color: selected
+              ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+              : theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+            color: color,
             width: selected ? 2 : 1,
           ),
-          borderRadius: BorderRadius.circular(8),
-          color: selected ? theme.colorScheme.primaryContainer.withOpacity(0.3) : null,
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 6),
+            Icon(icon, size: 40, color: color),
+            const SizedBox(height: 10),
             Text(
               label,
-              style: TextStyle(
+              style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: color,
-                fontSize: 13,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
               subtitle,
-              style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
