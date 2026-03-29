@@ -37,9 +37,12 @@ class PetUpdateRequest(BaseModel):
     """Body de PATCH /v1/pets/{pet_id}."""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     weight_kg: Optional[float] = Field(None, gt=0)
+    age_months: Optional[int] = Field(None, gt=0)
     bcs: Optional[int] = Field(None, ge=1, le=9)
     activity_level: Optional[str] = None
     current_diet: Optional[CurrentDiet] = None
+    medical_conditions: Optional[list[MedicalCondition]] = None
+    allergies: Optional[list[str]] = None
 
 
 class WeightRecordRequest(BaseModel):

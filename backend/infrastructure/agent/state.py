@@ -27,6 +27,7 @@ class NutriVetState(TypedDict, total=False):
     # Perfil de mascota (cargado por load_context)
     pet_profile: Optional[dict[str, Any]]   # PetProfile serializado
     active_plan: Optional[dict[str, Any]]   # NutritionPlan activo serializado
+    plan_history: list[dict[str, Any]]      # Resúmenes de planes previos (max 2, sin content JSONB)
 
     # Datos nutricionales calculados (determinístico)
     rer_kcal: Optional[float]

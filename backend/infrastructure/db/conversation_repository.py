@@ -57,7 +57,7 @@ class PostgreSQLConversationRepository:
     async def list_by_pet(
         self,
         pet_id: str,
-        limit: int = 10,
+        limit: int = 20,
     ) -> list[dict]:
         """
         Retorna los últimos N mensajes de la conversación de una mascota.

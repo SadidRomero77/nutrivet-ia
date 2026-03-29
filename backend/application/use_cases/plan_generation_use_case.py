@@ -44,24 +44,28 @@ class PlanGenerationUseCase:
     async def enqueue(
         self,
         pet_id: uuid.UUID,
-        owner_id: uuid.UUID,
+        owner_id: uuid.UUID | None,
         user_tier: UserTier,
         modality: str,
+        requester_vet_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """
         Valida prerrequisitos y encola un job de generación de plan.
 
         Args:
             pet_id: ID de la mascota para la que se genera el plan.
-            owner_id: ID del owner que solicita el plan.
-            user_tier: Tier del owner (para validar límite de planes).
+            owner_id: ID del owner que solicita el plan (None si es vet).
+            user_tier: Tier del solicitante (para validar límite de planes).
             modality: Modalidad del plan ('concentrado' o 'natural').
+            requester_vet_id: ID del vet solicitante (None si es owner).
+                Si se provee, se omite el chequeo de propiedad y se verifica
+                que el vet está asignado a la mascota.
 
         Returns:
             job_id: UUID del PlanJob creado para polling.
 
         Raises:
-            DomainError: Si la mascota no existe, el owner no tiene acceso,
+            DomainError: Si la mascota no existe, el solicitante no tiene acceso,
                          o se supera el límite de planes del tier.
         """
         # Verificar que la mascota existe
@@ -69,15 +73,23 @@ class PlanGenerationUseCase:
         if pet is None:
             raise DomainError(f"Mascota con ID '{pet_id}' no encontrada.")
 
-        # Verificar que el owner es dueño de la mascota
-        if pet.owner_id != owner_id:
-            raise DomainError("Acceso denegado: no eres el dueño de esta mascota.")
+        if requester_vet_id is not None:
+            # Acceso como veterinario: verificar que está asignado a la mascota
+            if pet.vet_id != requester_vet_id:
+                raise DomainError("Acceso denegado: no eres el veterinario asignado a esta mascota.")
+            # Usar owner_id real del pet; si el paciente no está vinculado, usar el vet como propietario del job
+            effective_owner_id: uuid.UUID = pet.owner_id if pet.owner_id is not None else requester_vet_id
+        else:
+            # Acceso como owner: verificar propiedad
+            if pet.owner_id != owner_id:
+                raise DomainError("Acceso denegado: no eres el dueño de esta mascota.")
+            effective_owner_id = owner_id  # type: ignore[assignment]
 
         # Verificar límite de planes por tier (desactivado en MVP — piloto sin restricciones)
         if not MVP_FREEMIUM_DISABLED:
             plan_limit = TIER_PLAN_LIMITS[user_tier]
             if plan_limit is not None:
-                current_count = await self._plan_repo.count_active_by_owner(owner_id)
+                current_count = await self._plan_repo.count_active_by_owner(effective_owner_id)
                 if current_count >= plan_limit:
                     raise DomainError(
                         f"Has alcanzado el límite de planes para tu plan "
@@ -89,7 +101,7 @@ class PlanGenerationUseCase:
         job = PlanJob(
             job_id=uuid.uuid4(),
             pet_id=pet_id,
-            owner_id=owner_id,
+            owner_id=effective_owner_id,
             modality=modality,
             status=PlanJobStatus.QUEUED,
         )

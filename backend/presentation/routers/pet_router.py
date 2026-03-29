@@ -165,9 +165,9 @@ async def update_pet(
     pet_id: uuid.UUID,
     body: PetUpdateRequest,
     session: AsyncSession = Depends(get_db_session),
-    user: TokenPayload = Depends(require_role("owner")),
+    user: TokenPayload = Depends(get_current_user),
 ) -> PetResponse:
-    """Actualizar datos de la mascota."""
+    """Actualizar datos de la mascota (owner o vet para sus pacientes clínicos)."""
     update_data = {k: v for k, v in body.model_dump().items() if v is not None}
     if "bcs" in update_data:
         update_data["bcs"] = BCS(update_data["bcs"])

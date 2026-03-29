@@ -55,6 +55,61 @@ const _allergens = [
 const _activityLevelsDog = ['sedentario', 'moderado', 'activo', 'muy_activo'];
 const _activityLevelsCat = ['indoor', 'indoor_outdoor', 'outdoor'];
 
+const _dogBreeds = [
+  'Criollo / Mestizo',
+  'Labrador Retriever',
+  'Golden Retriever',
+  'French Bulldog',
+  'Bulldog Inglés',
+  'Poodle (Caniche)',
+  'Beagle',
+  'Rottweiler',
+  'Pastor Alemán',
+  'Boxer',
+  'Chihuahua',
+  'Dachshund (Salchicha)',
+  'Shih Tzu',
+  'Yorkshire Terrier',
+  'Pomeranian',
+  'Doberman',
+  'Schnauzer Miniatura',
+  'Maltés',
+  'Border Collie',
+  'Husky Siberiano',
+  'Jack Russell Terrier',
+  'Cocker Spaniel',
+  'Shar Pei',
+  'Gran Danés',
+  'Bull Terrier',
+  'Pitbull',
+  'Bichón Frisé',
+  'Samoyedo',
+  'Akita Inu',
+  'Chow Chow',
+  'Otra raza...',
+];
+
+const _catBreeds = [
+  'Criollo / Mestizo',
+  'Siamés',
+  'Persa',
+  'Maine Coon',
+  'Bengala',
+  'Ragdoll',
+  'Scottish Fold',
+  'Abisinio',
+  'Sphynx (Sin pelo)',
+  'Birmano',
+  'British Shorthair',
+  'Himalayo',
+  'Angora Turco',
+  'Ruso Azul',
+  'Noruego de los Bosques',
+  'Devon Rex',
+  'Burmés',
+  'Otra raza...',
+];
+
 const _sizeLabels = {
   'mini': 'Mini (1-4 kg)',
   'pequeño': 'Pequeño (4-9 kg)',
@@ -94,6 +149,11 @@ class PetWizardScreen extends ConsumerStatefulWidget {
 class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
   final _pageCtrl = PageController();
   int _currentStep = 0;
+  // Evita llamadas concurrentes a _nextStep durante la animación de página.
+  // Sin este flag, un doble-tap dispara dos animateToPage simultáneos sobre el
+  // mismo PageController, lo que corrompe el estado del RenderObject y causa
+  // el assertion '_owner != null' en object.dart:2376.
+  bool _navigating = false;
 
   // ── Form keys por paso ─────────────────────────────────────────────────────
   final _step1Key = GlobalKey<FormState>();
@@ -103,7 +163,6 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
   // ── Controllers ───────────────────────────────────────────────────────────
   final _nameCtrl = TextEditingController();
   final _breedCtrl = TextEditingController();
-  final _ageCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
   final _customAllergyCtrl = TextEditingController();
 
@@ -114,6 +173,9 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
   String _reproductiveStatus = 'esterilizado';
   String? _activityLevel;
   int _bcs = 5;
+  // Edad en años + meses adicionales (evita que el usuario calcule meses)
+  int _ageYears = 0;
+  int _ageMonthsExtra = 1;
   final Set<String> _selectedConditions = {};
   final Set<String> _selectedAllergens = {};
   String _currentDiet = 'concentrado';
@@ -124,7 +186,6 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
     _pageCtrl.dispose();
     _nameCtrl.dispose();
     _breedCtrl.dispose();
-    _ageCtrl.dispose();
     _weightCtrl.dispose();
     _customAllergyCtrl.dispose();
     super.dispose();
@@ -138,6 +199,12 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
         return _step1Key.currentState?.validate() ?? false;
       case 1:
         if (_step2Key.currentState?.validate() == false) return false;
+        if (_ageYears == 0 && _ageMonthsExtra == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('La edad debe ser mayor a 0')),
+          );
+          return false;
+        }
         if (_species == 'perro' && _size == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Selecciona la talla de tu perro')),
@@ -160,27 +227,43 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
   }
 
   void _nextStep() {
+    if (_navigating || _loading) return;
     if (!_validateCurrentStep()) return;
     if (_currentStep < 5) {
-      setState(() => _currentStep++);
-      _pageCtrl.animateToPage(
-        _currentStep,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      setState(() {
+        _currentStep++;
+        _navigating = true;
+      });
+      _pageCtrl
+          .animateToPage(
+            _currentStep,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          )
+          .then((_) {
+        if (mounted) setState(() => _navigating = false);
+      });
     } else {
       _submit();
     }
   }
 
   void _prevStep() {
+    if (_navigating || _loading) return;
     if (_currentStep > 0) {
-      setState(() => _currentStep--);
-      _pageCtrl.animateToPage(
-        _currentStep,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      setState(() {
+        _currentStep--;
+        _navigating = true;
+      });
+      _pageCtrl
+          .animateToPage(
+            _currentStep,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          )
+          .then((_) {
+        if (mounted) setState(() => _navigating = false);
+      });
     } else {
       context.pop();
     }
@@ -208,7 +291,7 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
         'species': _species,
         'breed': _breedCtrl.text.trim(),
         'sex': _sex,
-        'age_months': int.parse(_ageCtrl.text),
+        'age_months': _ageYears * 12 + _ageMonthsExtra,
         'weight_kg': double.parse(_weightCtrl.text),
         if (_size != null) 'size': _size,
         'reproductive_status': _reproductiveStatus,
@@ -295,8 +378,6 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return PopScope(
       canPop: _currentStep == 0,
       onPopInvokedWithResult: (didPop, _) {
@@ -310,7 +391,18 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
             onPressed: _prevStep,
           ),
         ),
-        bottomNavigationBar: const AppFooter(),
+        // Barra de navegación fija en el fondo — nunca queda oculta por el
+        // teclado ni aplastada en pantallas pequeñas (mismo patrón que el
+        // wizard del veterinario).
+        bottomNavigationBar: _WizardNavBar(
+          currentStep: _currentStep,
+          totalSteps: 6,
+          loading: _loading || _navigating,
+          onBack: (_currentStep > 0 && !_navigating && !_loading)
+              ? _prevStep
+              : null,
+          onNext: _nextStep,
+        ),
         body: Column(
           children: [
             // ── Indicador de progreso ────────────────────────────────────────
@@ -343,7 +435,12 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
                   _Step2Measures(
                     formKey: _step2Key,
                     species: _species,
-                    ageCtrl: _ageCtrl,
+                    ageYears: _ageYears,
+                    ageMonthsExtra: _ageMonthsExtra,
+                    onAgeYearsChanged: (v) =>
+                        setState(() => _ageYears = v),
+                    onAgeMonthsChanged: (v) =>
+                        setState(() => _ageMonthsExtra = v),
                     weightCtrl: _weightCtrl,
                     size: _size,
                     onSizeChanged: (v) => setState(() => _size = v),
@@ -388,7 +485,6 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
                   _Step6Diet(
                     currentDiet: _currentDiet,
                     onDietChanged: (v) => setState(() => _currentDiet = v),
-                    // Resumen para revisión
                     petName: _nameCtrl.text,
                     species: _species,
                     breed: _breedCtrl.text,
@@ -398,15 +494,6 @@ class _PetWizardScreenState extends ConsumerState<PetWizardScreen> {
                   ),
                 ],
               ),
-            ),
-
-            // ── Barra de navegación ──────────────────────────────────────────
-            _WizardNavBar(
-              currentStep: _currentStep,
-              totalSteps: 6,
-              loading: _loading,
-              onBack: _currentStep > 0 ? _prevStep : null,
-              onNext: _nextStep,
             ),
           ],
         ),
@@ -524,40 +611,68 @@ class _WizardNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isLast = currentStep == totalSteps - 1;
+    // Inset explícito — evita doble padding con SafeArea en edge-to-edge Android
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Row(
-          children: [
-            if (onBack != null) ...[
-              OutlinedButton.icon(
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back, size: 18),
-                label: const Text('Anterior'),
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: loading ? null : onNext,
-                icon: loading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : Icon(
-                        isLast ? Icons.check : Icons.arrow_forward,
-                        size: 18,
-                      ),
-                label: Text(isLast ? 'Guardar mascota' : 'Siguiente'),
-              ),
+    // Column(mainAxisSize.min) garantiza altura mínima reportada correctamente
+    // al Scaffold para que body no solape la barra de navegación.
+    return ColoredBox(
+      color: theme.colorScheme.surface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Divider(
+            height: 0.5,
+            thickness: 0.5,
+            color: theme.colorScheme.outlineVariant,
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 12 + bottomInset),
+            child: Row(
+              children: [
+                if (onBack != null) ...[
+                  OutlinedButton.icon(
+                    onPressed: onBack,
+                    // Sobreescribe minimumSize del tema (Size.fromHeight = ∞ ancho)
+                    // para evitar RenderFlex overflow dentro del Row.
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(80, 44),
+                    ),
+                    icon: const Icon(Icons.arrow_back, size: 18),
+                    label: const Text('Anterior'),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: loading ? null : onNext,
+                    style: FilledButton.styleFrom(
+                      minimumSize:
+                          isLast ? const Size.fromHeight(52) : const Size(0, 44),
+                    ),
+                    icon: loading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(
+                            isLast ? Icons.check_circle_outline : Icons.arrow_forward,
+                            size: 20,
+                          ),
+                    label: Text(
+                      isLast ? 'Finalizar' : 'Siguiente',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -565,7 +680,7 @@ class _WizardNavBar extends StatelessWidget {
 
 // ── Paso 1: Identidad ─────────────────────────────────────────────────────────
 
-class _Step1Identity extends StatelessWidget {
+class _Step1Identity extends StatefulWidget {
   const _Step1Identity({
     required this.formKey,
     required this.species,
@@ -585,9 +700,37 @@ class _Step1Identity extends StatelessWidget {
   final void Function(String) onSexChanged;
 
   @override
+  State<_Step1Identity> createState() => _Step1IdentityState();
+}
+
+class _Step1IdentityState extends State<_Step1Identity> {
+  String? _dropdownBreed;
+
+  bool get _isOtherBreed => _dropdownBreed == 'Otra raza...';
+
+  List<String> get _breeds {
+    final raw = (widget.species == 'perro' ? _dogBreeds : _catBreeds).toList();
+    // Criollo / Mestizo al inicio, Otra raza... al final, resto en orden alfabético
+    raw.remove('Criollo / Mestizo');
+    raw.remove('Otra raza...');
+    raw.sort();
+    return ['Criollo / Mestizo', ...raw, 'Otra raza...'];
+  }
+
+  @override
+  void didUpdateWidget(_Step1Identity oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Al cambiar especie, reiniciar selección de raza
+    if (oldWidget.species != widget.species) {
+      setState(() => _dropdownBreed = null);
+      widget.breedCtrl.text = '';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Form(
-      key: formKey,
+      key: widget.formKey,
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -605,8 +748,8 @@ class _Step1Identity extends StatelessWidget {
                   key: const ValueKey('species_dog'),
                   label: 'Canino',
                   emoji: '🐕',
-                  selected: species == 'perro',
-                  onTap: () => onSpeciesChanged('perro'),
+                  selected: widget.species == 'perro',
+                  onTap: () => widget.onSpeciesChanged('perro'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -615,8 +758,8 @@ class _Step1Identity extends StatelessWidget {
                   key: const ValueKey('species_cat'),
                   label: 'Felino',
                   emoji: '🐈',
-                  selected: species == 'gato',
-                  onTap: () => onSpeciesChanged('gato'),
+                  selected: widget.species == 'gato',
+                  onTap: () => widget.onSpeciesChanged('gato'),
                 ),
               ),
             ],
@@ -625,7 +768,7 @@ class _Step1Identity extends StatelessWidget {
 
           TextFormField(
             key: const ValueKey('pet_name_field'),
-            controller: nameCtrl,
+            controller: widget.nameCtrl,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
               labelText: 'Nombre de la mascota *',
@@ -637,18 +780,47 @@ class _Step1Identity extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          TextFormField(
-            key: const ValueKey('breed_field'),
-            controller: breedCtrl,
-            textCapitalization: TextCapitalization.words,
+          // ── Raza — dropdown con razas comunes ────────────────────────────
+          DropdownButtonFormField<String>(
+            key: const ValueKey('breed_dropdown'),
+            value: _dropdownBreed,
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Raza *',
               prefixIcon: Icon(Icons.search),
-              hintText: 'Golden Retriever, Siamés, mestizo...',
             ),
+            hint: const Text('Selecciona la raza'),
+            items: _breeds
+                .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                .toList(),
+            onChanged: (value) {
+              setState(() => _dropdownBreed = value);
+              if (value != null && value != 'Otra raza...') {
+                widget.breedCtrl.text = value;
+              } else {
+                widget.breedCtrl.text = '';
+              }
+            },
             validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Ingresa la raza' : null,
+                v == null ? 'Selecciona una raza' : null,
           ),
+
+          // Campo libre cuando elige "Otra raza..."
+          if (_isOtherBreed) ...[
+            const SizedBox(height: 12),
+            TextFormField(
+              key: const ValueKey('breed_custom_field'),
+              controller: widget.breedCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Escribe la raza *',
+                prefixIcon: Icon(Icons.edit_outlined),
+                hintText: 'Ej: Pitbull, Galgo...',
+              ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Ingresa la raza' : null,
+            ),
+          ],
           const SizedBox(height: 16),
 
           Text('Sexo',
@@ -663,8 +835,8 @@ class _Step1Identity extends StatelessWidget {
                 child: _RadioCard(
                   label: 'Macho',
                   icon: Icons.male,
-                  selected: sex == 'macho',
-                  onTap: () => onSexChanged('macho'),
+                  selected: widget.sex == 'macho',
+                  onTap: () => widget.onSexChanged('macho'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -672,8 +844,8 @@ class _Step1Identity extends StatelessWidget {
                 child: _RadioCard(
                   label: 'Hembra',
                   icon: Icons.female,
-                  selected: sex == 'hembra',
-                  onTap: () => onSexChanged('hembra'),
+                  selected: widget.sex == 'hembra',
+                  onTap: () => widget.onSexChanged('hembra'),
                 ),
               ),
             ],
@@ -690,7 +862,10 @@ class _Step2Measures extends StatelessWidget {
   const _Step2Measures({
     required this.formKey,
     required this.species,
-    required this.ageCtrl,
+    required this.ageYears,
+    required this.ageMonthsExtra,
+    required this.onAgeYearsChanged,
+    required this.onAgeMonthsChanged,
     required this.weightCtrl,
     required this.size,
     required this.onSizeChanged,
@@ -698,13 +873,18 @@ class _Step2Measures extends StatelessWidget {
 
   final GlobalKey<FormState> formKey;
   final String species;
-  final TextEditingController ageCtrl;
+  final int ageYears;
+  final int ageMonthsExtra;
+  final void Function(int) onAgeYearsChanged;
+  final void Function(int) onAgeMonthsChanged;
   final TextEditingController weightCtrl;
   final String? size;
   final void Function(String?) onSizeChanged;
 
   @override
   Widget build(BuildContext context) {
+    final totalMonths = ageYears * 12 + ageMonthsExtra;
+
     return Form(
       key: formKey,
       child: ListView(
@@ -719,47 +899,89 @@ class _Step2Measures extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          // ── Edad intuitiva: años + meses ──────────────────────────────────
+          Text(
+            'Edad *',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                child: TextFormField(
-                  key: const ValueKey('age_field'),
-                  controller: ageCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Edad *',
-                    suffixText: 'meses',
-                    hintText: '24',
-                    prefixIcon: Icon(Icons.cake_outlined),
+                child: DropdownButtonFormField<int>(
+                  key: const ValueKey('age_years_dropdown'),
+                  value: ageYears,
+                  // Sin prefixIcon — espacio insuficiente en Row(Expanded) en
+                  // pantallas estrechas: 48dp icono + label + flecha = overflow
+                  decoration: const InputDecoration(labelText: 'Años'),
+                  isExpanded: true,
+                  items: List.generate(
+                    21,
+                    (i) => DropdownMenuItem(
+                      value: i,
+                      child: Text(
+                        i == 0 ? '< 1 año' : '$i año${i > 1 ? "s" : ""}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
-                  validator: (v) {
-                    final n = int.tryParse(v ?? '');
-                    if (n == null || n <= 0) return 'Inválida';
-                    return null;
+                  onChanged: (v) {
+                    if (v != null) onAgeYearsChanged(v);
                   },
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: TextFormField(
-                  key: const ValueKey('weight_field'),
-                  controller: weightCtrl,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Peso *',
-                    suffixText: 'kg',
-                    hintText: '8.5',
-                    prefixIcon: Icon(Icons.monitor_weight_outlined),
+                child: DropdownButtonFormField<int>(
+                  key: const ValueKey('age_months_dropdown'),
+                  value: ageMonthsExtra,
+                  decoration: const InputDecoration(labelText: 'Meses +'),
+                  isExpanded: true,
+                  items: List.generate(
+                    12,
+                    (i) => DropdownMenuItem(
+                      value: i,
+                      child: Text('$i mes${i != 1 ? "es" : ""}'),
+                    ),
                   ),
-                  validator: (v) {
-                    final n = double.tryParse(v ?? '');
-                    if (n == null || n <= 0) return 'Inválido';
-                    return null;
+                  onChanged: (v) {
+                    if (v != null) onAgeMonthsChanged(v);
                   },
                 ),
               ),
             ],
+          ),
+          if (totalMonths > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Total: $totalMonths ${totalMonths == 1 ? "mes" : "meses"}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+
+          // ── Peso ───────────────────────────────────────────────────────────
+          TextFormField(
+            key: const ValueKey('weight_field'),
+            controller: weightCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Peso *',
+              suffixText: 'kg',
+              hintText: '8.5',
+              prefixIcon: Icon(Icons.monitor_weight_outlined),
+            ),
+            validator: (v) {
+              final n = double.tryParse(v ?? '');
+              if (n == null || n <= 0) return 'Inválido';
+              return null;
+            },
           ),
 
           if (species == 'perro') ...[
@@ -1263,6 +1485,29 @@ class _Step6Diet extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
+        const SizedBox(height: 20),
+
+        // CTA visual al final del scroll — indica que el botón inferior
+        // es la acción para terminar (patrón wizard: barra fija siempre visible)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.arrow_downward,
+                size: 14, color: theme.colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              'Pulsa Finalizar  ✓  para crear el perfil',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.arrow_downward,
+                size: 14, color: theme.colorScheme.primary),
+          ],
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }

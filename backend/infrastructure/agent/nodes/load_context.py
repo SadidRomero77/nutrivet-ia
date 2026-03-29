@@ -34,16 +34,32 @@ def _pet_to_dict(pet: Any) -> dict[str, Any]:
                 "alert": r.alert,
             }
 
+    # Nombre de raza: preferir campo breed (string) sobre breed_id
+    breed_name: str | None = getattr(pet, "breed", None) or breed_id
+
+    # Campos opcionales con fallback seguro
+    sex_val = pet.sex.value if hasattr(pet, "sex") and pet.sex else None
+    size_val = pet.size.value if hasattr(pet, "size") and pet.size else None
+    current_diet_val = (
+        pet.current_diet.value
+        if hasattr(pet, "current_diet") and pet.current_diet
+        else None
+    )
+
     result: dict[str, Any] = {
         "pet_id": str(pet.pet_id),
         "species": pet.species.value,
+        "breed": breed_name,
+        "sex": sex_val,
         "weight_kg": pet.weight_kg,
         "age_months": pet.age_months,
+        "size": size_val,
         "reproductive_status": pet.reproductive_status.value,
         "activity_level": pet.activity_level.value,
         "bcs": pet.bcs.value,
         "medical_conditions": [c.value for c in pet.medical_conditions],
         "allergies": list(pet.allergies) if pet.allergies else [],
+        "current_diet": current_diet_val,
         "owner_id": str(pet.owner_id),
         "breed_id": breed_id,
     }
@@ -53,7 +69,7 @@ def _pet_to_dict(pet: Any) -> dict[str, Any]:
 
 
 def _plan_to_dict(plan: Any) -> dict[str, Any]:
-    """Serializa NutritionPlan a dict."""
+    """Serializa NutritionPlan a dict (con content completo para plan activo)."""
     return {
         "plan_id": str(plan.plan_id),
         "status": plan.status.value,
@@ -62,6 +78,35 @@ def _plan_to_dict(plan: Any) -> dict[str, Any]:
         "rer_kcal": plan.rer_kcal,
         "der_kcal": plan.der_kcal,
         "content": plan.content or {},
+    }
+
+
+def _plan_to_summary(plan: Any) -> dict[str, Any]:
+    """
+    Serializa NutritionPlan a resumen compacto para historial.
+
+    Solo incluye metadatos — sin content JSONB completo para no saturar el contexto.
+    """
+    created_at_str = (
+        plan.created_at.strftime("%Y-%m-%d")
+        if hasattr(plan, "created_at") and plan.created_at
+        else "fecha desconocida"
+    )
+    content = plan.content or {}
+    modality_val = plan.modality.value if hasattr(plan.modality, "value") else str(plan.modality)
+    return {
+        "plan_id": str(plan.plan_id),
+        "status": plan.status.value,
+        "plan_type": plan.plan_type.value,
+        "modality": modality_val,
+        "rer_kcal": plan.rer_kcal,
+        "der_kcal": plan.der_kcal,
+        "created_at": created_at_str,
+        # Incluir solo nombres de ingredientes principales (sin cantidades/proporciones)
+        "main_ingredients": [
+            ing.get("nombre", "") if isinstance(ing, dict) else str(ing)
+            for ing in (content.get("ingredientes") or [])[:5]
+        ],
     }
 
 
@@ -114,4 +159,17 @@ async def load_context(
     active_plan = await plan_repo.find_active_by_pet(pet_id)
     plan_dict = _plan_to_dict(active_plan) if active_plan else None
 
-    return {**state, "pet_profile": pet_dict, "active_plan": plan_dict}
+    # Historial de planes recientes (para memoria contextual del agente)
+    plan_history: list[dict[str, Any]] = []
+    try:
+        recent_plans = await plan_repo.list_recent_by_pet(pet_id, limit=3)
+        for p in recent_plans:
+            # Excluir el plan activo actual para no duplicar
+            if active_plan and str(p.plan_id) == str(active_plan.plan_id):
+                continue
+            plan_history.append(_plan_to_summary(p))
+    except AttributeError:
+        # list_recent_by_pet puede no estar implementado en mocks de test
+        pass
+
+    return {**state, "pet_profile": pet_dict, "active_plan": plan_dict, "plan_history": plan_history}

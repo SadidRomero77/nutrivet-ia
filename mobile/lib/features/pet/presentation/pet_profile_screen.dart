@@ -217,12 +217,14 @@ class _PetProfileContent extends StatelessWidget {
         ),
         _InfoCard(
           title: 'Salud',
+          titleColor: pet.medicalConditions.isNotEmpty ? Colors.orange : null,
           rows: [
             _InfoRow(
               'Condiciones médicas',
               pet.medicalConditions.isEmpty
                   ? 'Ninguna conocida'
                   : pet.medicalConditions.join(', '),
+              valueColor: pet.medicalConditions.isNotEmpty ? Colors.orange : null,
             ),
             _InfoRow(
               'Alergias',
@@ -303,10 +305,11 @@ class _ActionButton extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.title, required this.rows});
+  const _InfoCard({required this.title, required this.rows, this.titleColor});
 
   final String title;
   final List<_InfoRow> rows;
+  final Color? titleColor;
 
   @override
   Widget build(BuildContext context) {
@@ -322,7 +325,7 @@ class _InfoCard extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
+                  ?.copyWith(fontWeight: FontWeight.bold, color: titleColor),
             ),
             const SizedBox(height: 8),
             ...rows,
@@ -334,10 +337,11 @@ class _InfoCard extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow(this.label, this.value);
+  const _InfoRow(this.label, this.value, {this.valueColor});
 
   final String label;
   final String value;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +360,11 @@ class _InfoRow extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+                color: valueColor,
+              ),
             ),
           ),
         ],

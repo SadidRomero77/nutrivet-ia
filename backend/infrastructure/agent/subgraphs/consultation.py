@@ -204,6 +204,7 @@ async def _streaming_generator(
     user_tier = state.get("user_tier", "FREE")
     pet_profile = state.get("pet_profile")
     active_plan = state.get("active_plan")
+    plan_history = state.get("plan_history", [])
 
     # Nodos determinísticos (sin LLM) — si hay short-circuit, yield y termina
     short_circuit, intent = await _run_pre_llm_pipeline(
@@ -227,6 +228,7 @@ async def _streaming_generator(
         user_tier=user_tier,
         pet_profile=pet_profile,
         active_plan=active_plan,
+        plan_history=plan_history,
         llm_client=llm_client,
     ):
         full_response += chunk
@@ -272,6 +274,7 @@ async def run_consultation_subgraph(
     user_tier = state.get("user_tier", "FREE")
     pet_profile = state.get("pet_profile")
     active_plan = state.get("active_plan")
+    plan_history = state.get("plan_history", [])
 
     # Nodos determinísticos
     short_circuit, intent = await _run_pre_llm_pipeline(
@@ -294,6 +297,7 @@ async def run_consultation_subgraph(
         user_tier=user_tier,
         pet_profile=pet_profile,
         active_plan=active_plan,
+        plan_history=plan_history,
         llm_client=llm_client,
     ):
         chunks.append(chunk)

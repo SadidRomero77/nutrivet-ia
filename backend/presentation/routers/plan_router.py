@@ -151,12 +151,32 @@ async def _run_worker_background(job_id: uuid.UUID, user_tier: UserTier) -> None
 
     En producción este rol lo cumple el ARQ worker (Celery-like sobre Redis).
     Para dev y staging sin Redis, FastAPI BackgroundTasks es suficiente.
+
+    Estrategia de sesiones:
+    - Fase 1 (pre): marca PROCESSING y hace commit inmediato — polling lo ve de inmediato.
+    - Fase 2 (worker): ejecuta generación completa; commit al final.
+    - Fase 3 (fallback): si el commit falla, abre sesión limpia y marca FAILED.
     """
+    from backend.infrastructure.db.plan_job_repository import PostgreSQLPlanJobRepository
+
+    # Fase 1: marcar PROCESSING con commit inmediato para que el polling lo vea
+    async with AsyncSessionLocal() as pre_session:
+        try:
+            pre_job_repo = PostgreSQLPlanJobRepository(pre_session)
+            pre_job = await pre_job_repo.find_by_id(job_id)
+            if pre_job is not None:
+                pre_job.mark_processing()
+                await pre_job_repo.update(pre_job)
+                await pre_session.commit()
+        except Exception:
+            logger.warning("No se pudo pre-marcar PROCESSING job=%s — continuando", job_id)
+
+    # Fase 2: ejecutar la generación completa
+    worker_exc: Exception | None = None
     async with AsyncSessionLocal() as session:
         try:
             from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTraceRepository
             from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
-            from backend.infrastructure.db.plan_job_repository import PostgreSQLPlanJobRepository
             from backend.infrastructure.db.plan_repository import PostgreSQLPlanRepository
             worker = PlanGenerationWorker(
                 pet_repo=PostgreSQLPetRepository(session),
@@ -170,9 +190,24 @@ async def _run_worker_background(job_id: uuid.UUID, user_tier: UserTier) -> None
 
             # Push notification: notificar al vet si el plan quedó PENDING_VET
             await _notify_vet_if_pending(session=session, job_id=job_id)
-        except Exception:
+        except Exception as exc:
+            worker_exc = exc
             await session.rollback()
             logger.exception("plan_generation_worker falló job=%s", job_id)
+
+    # Fase 3 (fallback): si hubo fallo externo al worker, marcar FAILED en sesión limpia
+    if worker_exc is not None:
+        async with AsyncSessionLocal() as err_session:
+            try:
+                err_job_repo = PostgreSQLPlanJobRepository(err_session)
+                err_job = await err_job_repo.find_by_id(job_id)
+                if err_job is not None and err_job.status.value not in ("READY", "FAILED"):
+                    err_job.mark_failed(error_message=str(worker_exc))
+                    await err_job_repo.update(err_job)
+                    await err_session.commit()
+                    logger.info("job=%s marcado FAILED en sesión de fallback", job_id)
+            except Exception:
+                logger.exception("No se pudo marcar FAILED job=%s en fallback", job_id)
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +419,7 @@ async def generate_plan(
     body: PlanGenerateRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
-    user: TokenPayload = Depends(require_role("owner")),
+    user: TokenPayload = Depends(get_current_user),
 ) -> PlanJobResponse:
     """
     Encola job de generación de plan. Retorna job_id para polling.
@@ -394,11 +429,13 @@ async def generate_plan(
     """
     try:
         uc = _gen_use_case(session)
+        is_vet = user.role.value == "vet"
         job_id = await uc.enqueue(
             pet_id=body.pet_id,
-            owner_id=user.user_id,
+            owner_id=None if is_vet else user.user_id,
             user_tier=user.tier,
             modality=body.modality,
+            requester_vet_id=user.user_id if is_vet else None,
         )
         # Commit explícito ANTES de disparar background task para evitar
         # condición de carrera: el worker crea su propia sesión y necesita
@@ -428,9 +465,9 @@ async def get_job_status(
 @router.get("/v1/plans", response_model=list[PlanSummaryResponse])
 async def list_plans(
     session: AsyncSession = Depends(get_db_session),
-    user: TokenPayload = Depends(require_role("owner")),
+    user: TokenPayload = Depends(get_current_user),
 ) -> list[PlanSummaryResponse]:
-    """Lista todos los planes del owner autenticado."""
+    """Lista todos los planes del usuario autenticado (owner o vet con pacientes clínicos)."""
     plan_repo = PostgreSQLPlanRepository(session)
     plans = await plan_repo.list_by_owner(user.user_id)
     return [_plan_to_summary(p) for p in plans]

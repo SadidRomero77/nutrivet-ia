@@ -233,8 +233,50 @@ Validado por Lady Carolina Castañeda (MV, BAMPYSVET)
 
 ## Estado Actual
 
-**Fase**: PRD v2.0 aprobado — todos los segmentos consolidados en `specs/prd.md`
-**Próximo paso**: Inicialización del repositorio de código (backend + mobile) — Fase 1 del plan de entrega
+**Fase**: Code Generation completo — app compilable y funcional
+**Última actualización**: 2026-03-26
+
+### Sprints completados
+
+| Sprint | Descripción | Commits clave |
+|--------|-------------|---------------|
+| unit-01 a unit-09 | Domain core → Mobile app base | múltiples |
+| agent-prompts-validators | 57 tests de prompts y validators | 454c49c |
+| security-hardening | OWASP Top 10 + LLM + Agentic + NIST ZT | 89e62ba…b5ada58 |
+| llm-integration | OpenRouter real + BackgroundTask worker + chat history | d5e3eaf |
+| plan-clinico-completo | Estructura plan Lady Carolina (10 secciones) | 2c6f7e9, bd15da6 |
+| Sprint 4 | clinical_supplements + drug_nutrient_interactions + 4 protocolos nuevos (17 condiciones) | 91aacae |
+| Sprint 5 | B-01/B-06 integrados en prompts; build_conversation_system_prompt con conditions | 304543b |
+| Sprint 6 | Coverage domain 87%→95%; CI/CD GitHub Actions (bandit+safety+G5+Sally) | 0861fb4 |
+| Sprint 7 | PDF export completo — 10 secciones clínicas, especificacion_compra, disclaimer doble | ceb6f0d |
+| Sprint 8 | Subgrafos reales (stubs eliminados), 17 condiciones Flutter, PENDING_VET banner, trazabilidad vet | 1fefd99 |
+| Sprint 9 | LLM routing production-grade: OpenRouter, umbral 2+, fallback chain | d7be985 |
+| Sprint Admin | Panel admin completo: overview, users, vet approval, payments, tier change | cd1fe85 |
+| Sprint 10 | Owner UX completo: forgot/reset password, paywall upgrade, plan tabs, soporte, términos | 182d773 |
+| Bug fixes | vet_status missing en /me; 3 compilation bugs; build_runner .g.dart | ee47dea, 2bc55e9 |
+
+### Estado de tests
+
+- **179 tests pasando** · 0 fallos (PostgreSQL connection expected en dev sin DB)
+- Cobertura domain: **95%** (gate G5: ≥80% ✅)
+- Sally golden case: RER=396.0 · DER=534.0 kcal ✅ (G8 ✅)
+- CI/CD: bandit 0 HIGH/MEDIUM ✅ · safety: pasar en PR
+
+### Desarrollo en dispositivo físico (USB)
+
+```bash
+# 1. Levantar backend
+uv run uvicorn main:app --reload --reload-dir backend --host 0.0.0.0
+
+# 2. Tunelizar puertos por USB (API + VM Service para hot-reload en WSL2)
+adb reverse tcp:8000 tcp:8000
+adb reverse tcp:54321 tcp:54321
+
+# 3. Correr Flutter con puerto VM Service fijo (evita SocketException en WSL2)
+flutter run -d <device-id> --host-vmservice-port 54321 --dds-port 54322
+```
+
+**Próximo paso**: Quality Gates G1-G4, G6, G7 con Lady Carolina + deploy a Hetzner
 
 ## Acciones que Requieren Confirmación Explícita
 

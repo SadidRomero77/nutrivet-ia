@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/app_footer.dart';
@@ -33,14 +34,22 @@ class PlanDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const NutrivetTitle('Plan nutricional'),
+        // Siempre mostrar botón de volver — context.go reemplaza el stack
+        // al terminar la generación, por lo que automaticallyImplyLeading
+        // no lo muestra. Usamos canPop para decidir la acción.
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/dashboard'),
+        ),
         actions: [
           planAsync.whenOrNull(
             data: (plan) => plan.isActive
                 ? IconButton(
                     key: const ValueKey('share_button'),
                     icon: const Icon(Icons.share),
-                    tooltip: 'Exportar y compartir',
-                    onPressed: () => _export(context, ref, planId),
+                    tooltip: 'Compartir plan',
+                    onPressed: () => _export(context, ref, plan),
                   )
                 : null,
           ) ??
@@ -57,19 +66,44 @@ class PlanDetailScreen extends ConsumerWidget {
     );
   }
 
+  /// Comparte el plan como texto con información nutricional clave.
+  /// Intenta exportar PDF desde el backend; si falla, comparte como texto.
   Future<void> _export(
-    BuildContext context,
-    WidgetRef ref,
-    String planId,
-  ) async {
+      BuildContext context, WidgetRef ref, PlanDetail plan) async {
     try {
-      await ref.read(planRepositoryProvider).exportAndShare(planId);
+      await ref.read(planRepositoryProvider).exportAndShare(plan.planId);
     } catch (_) {
+      // Backend export no disponible — compartir resumen en texto plano
+      final sb = StringBuffer()
+        ..writeln('🐾 Plan nutricional NutriVet.IA')
+        ..writeln()
+        ..writeln('Modalidad: ${plan.modality}')
+        ..writeln(
+            'Calorías: ${plan.perfilNutricional.derKcal.toStringAsFixed(0)} kcal/día')
+        ..writeln(
+            '  RER: ${plan.perfilNutricional.rerKcal.toStringAsFixed(0)} kcal')
+        ..writeln();
+
+      if (plan.ingredientes.isNotEmpty) {
+        sb.writeln('Ingredientes principales:');
+        for (final ing in plan.ingredientes.take(5)) {
+          final qty = ing.cantidadG != null
+              ? ' — ${ing.cantidadG!.toStringAsFixed(0)} g'
+              : '';
+          sb.writeln('  • ${ing.nombre}$qty');
+        }
+        if (plan.ingredientes.length > 5) {
+          sb.writeln('  … y ${plan.ingredientes.length - 5} más');
+        }
+        sb.writeln();
+      }
+
+      sb.writeln(plan.disclaimer);
+
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error al exportar el plan. Intenta de nuevo.'),
-          ),
+        await Share.share(
+          sb.toString(),
+          subject: 'Plan nutricional NutriVet.IA',
         );
       }
     }

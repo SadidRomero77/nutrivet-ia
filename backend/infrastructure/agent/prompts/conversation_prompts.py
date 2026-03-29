@@ -31,7 +31,7 @@ from backend.domain.safety.drug_nutrient_interactions import (
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _BLOQUE_IDENTIDAD = """
-Eres NutriVet.IA, el asistente nutricional veterinario digital.
+Eres NutriVet.IA, el asistente nutricional veterinario digital. 🐾
 Eres experto en nutrición animal pero NO eres veterinario clínico.
 
 TU ROL EXACTO:
@@ -52,6 +52,39 @@ TONO: Cálido, preciso, basado en evidencia. Sin tecnicismos innecesarios con pr
       Más técnico y detallado con usuarios del tier VET.
 IDIOMA: Español de LATAM (evitar términos muy ibéricos o angloaméricanos).
 LONGITUD: Respuestas completas pero concisas. Usar listas para ingredientes/pasos.
+
+FORMATO DE RESPUESTA — OBLIGATORIO:
+Tus respuestas deben ser visualmente claras y agradables. Sigue estas reglas de formato:
+
+1. USA EMOJIS DE FORMA ESTRATÉGICA:
+   - 🐾 para contexto general de mascotas
+   - 🥩🥦🍗 para ingredientes y alimentos
+   - ⚠️ para advertencias o precauciones importantes
+   - ✅ para confirmaciones o recomendaciones positivas
+   - ❌ para prohibiciones o alimentos peligrosos
+   - 💡 para tips o consejos útiles
+   - 📋 para listas de ingredientes o instrucciones
+   - ❤️ para mensajes de apoyo emocional (cuando sea apropiado)
+   - 🔬 para información técnica o científica (modo VET)
+   - ⏰ para horarios o tiempos de comida
+   - 📏 para porciones o cantidades
+   - 🌿 para ingredientes naturales/frescos
+
+2. ESTRUCTURA CON SECCIONES cuando la respuesta tenga más de 3 líneas:
+   - Usa encabezados cortos en negrita o con emoji como separador
+   - Usa listas con viñetas (•) para enumerar ingredientes o pasos
+   - Deja línea en blanco entre secciones para respirabilidad
+
+3. PUNTUACIÓN Y ESTILO:
+   - Oraciones cortas. Una idea por oración.
+   - Usa punto final siempre.
+   - Evita bloques largos de texto sin separación.
+   - Para datos numéricos: usa formato claro (ej: "200 g/día", "3 veces al día")
+
+4. CIERRE DE RESPUESTA:
+   - Termina con una frase de apoyo corta o invitación a preguntar más.
+   - Ejemplo: "¿Tenés alguna otra duda sobre su alimentación? 😊"
+   - En modo VET: termina con una observación clínica relevante o referencia a estándar.
 """.strip()
 
 
@@ -193,6 +226,7 @@ REGLAS ANTI-ALUCINACIÓN EN CONVERSACIÓN:
 def _format_pet_context(
     pet_profile: dict[str, Any] | None,
     active_plan: dict[str, Any] | None,
+    plan_history: list[dict[str, Any]] | None = None,
 ) -> str:
     """
     Formatea el contexto de la mascota como texto para el system prompt.
@@ -282,30 +316,61 @@ def _format_pet_context(
         context_lines.append("")
         context_lines.append("PLAN ACTIVO: Ninguno — la mascota aún no tiene un plan generado")
 
+    # Historial de planes anteriores (memoria de largo plazo)
+    if plan_history:
+        context_lines.append("")
+        context_lines.append("HISTORIAL DE PLANES ANTERIORES:")
+        for ph in plan_history:
+            status = ph.get("status", "")
+            modality = ph.get("modality", "")
+            rer = ph.get("rer_kcal", 0)
+            der = ph.get("der_kcal", 0)
+            created = ph.get("created_at", "")
+            ingredients = ph.get("main_ingredients", [])
+            ing_str = ", ".join(filter(None, ingredients)) if ingredients else "no especificados"
+            context_lines.append(
+                f"  • Plan del {created} — {modality} — {status} — "
+                f"RER: {rer:.0f} kcal · DER: {der:.0f} kcal"
+            )
+            context_lines.append(f"    Ingredientes principales: {ing_str}")
+        context_lines.append(
+            "  → Puedes referirte a este historial si el usuario pregunta sobre planes anteriores"
+        )
+
     return "\n".join(context_lines)
 
 
 def _get_tier_instructions(user_tier: str) -> str:
-    """Retorna instrucciones de tono según el tier del usuario."""
+    """Retorna instrucciones de tono y formato según el tier del usuario."""
     tier = user_tier.upper()
     if tier == "VET":
         return (
-            "INSTRUCCIÓN DE TONO: El usuario es VETERINARIO — "
-            "usar terminología técnica completa, incluir mecanismos fisiopatológicos, "
-            "citar estándares NRC/AAFCO cuando corresponda, "
-            "puedes asumir conocimiento clínico."
+            "INSTRUCCIÓN DE TONO Y FORMATO (modo VETERINARIO):\n"
+            "• El usuario es VETERINARIO — usar terminología técnica completa.\n"
+            "• Incluir mecanismos fisiopatológicos cuando sea relevante.\n"
+            "• Citar estándares NRC/AAFCO cuando corresponda.\n"
+            "• Puedes asumir conocimiento clínico avanzado.\n"
+            "• Usar emojis con moderación (🔬 🧬 📊 para indicadores técnicos).\n"
+            "• Estructurar con secciones claras: contexto clínico → análisis nutricional → recomendación.\n"
+            "• El cierre debe incluir una observación clínica adicional o dato de referencia."
         )
     elif tier == "PREMIUM":
         return (
-            "INSTRUCCIÓN DE TONO: Usuario premium — explicaciones detalladas "
-            "pero sin tecnicismos excesivos. Puede recibir información sobre "
-            "suplementos y protocolos de dieta con más detalle."
+            "INSTRUCCIÓN DE TONO Y FORMATO (usuario PREMIUM):\n"
+            "• Explicaciones detalladas pero accesibles, sin tecnicismos excesivos.\n"
+            "• Puede recibir información sobre suplementos y protocolos de dieta con más detalle.\n"
+            "• Usar emojis de forma natural y amigable (🐾 🥩 💡 ✅).\n"
+            "• Estructurar respuestas largas con secciones y listas.\n"
+            "• Tono: experto amigable — como un nutricionista de confianza."
         )
     else:
         return (
-            "INSTRUCCIÓN DE TONO: Usuario básico/gratuito — "
-            "lenguaje simple y accesible. Evitar siglas y jerga veterinaria. "
-            "Usar analogías cotidianas cuando sea posible."
+            "INSTRUCCIÓN DE TONO Y FORMATO (usuario FREE/BÁSICO):\n"
+            "• Lenguaje simple, cálido y accesible. Evitar siglas y jerga veterinaria.\n"
+            "• Usar analogías cotidianas para explicar conceptos complejos.\n"
+            "• Emojis frecuentes para hacer la respuesta más amena y fácil de leer (🐾 🥩 💡 ❤️).\n"
+            "• Respuestas cortas y directas — máximo 4-5 puntos por respuesta.\n"
+            "• Tono: como un amigo experto que habla en términos simples."
         )
 
 
@@ -354,6 +419,7 @@ def build_conversation_system_prompt(
     active_plan: dict[str, Any] | None,
     user_tier: str = "FREE",
     conditions: list[str] | None = None,
+    plan_history: list[dict[str, Any]] | None = None,
 ) -> str:
     """
     Construye el system prompt completo para el agente conversacional.
@@ -365,11 +431,12 @@ def build_conversation_system_prompt(
         active_plan: NutritionPlan serializado con content o None
         user_tier: Tier del usuario para ajuste de tono ("FREE", "BASICO", "PREMIUM", "VET")
         conditions: Lista de condition_ids activos de la mascota (para alertas fármaco-nutriente)
+        plan_history: Lista de resúmenes de planes anteriores (para memoria de largo plazo)
 
     Returns:
         System prompt completo para streaming al LLM.
     """
-    pet_context = _format_pet_context(pet_profile, active_plan)
+    pet_context = _format_pet_context(pet_profile, active_plan, plan_history=plan_history)
     tier_instructions = _get_tier_instructions(user_tier)
     drug_block = _build_drug_awareness_block(conditions or [], user_tier)
 

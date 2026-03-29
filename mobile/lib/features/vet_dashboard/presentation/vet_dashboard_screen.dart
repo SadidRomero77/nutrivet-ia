@@ -32,11 +32,14 @@ Future<List<PetModel>> _vetPatients(Ref ref) =>
     ref.read(vetRepositoryProvider).listPatients();
 
 class VetDashboardScreen extends ConsumerWidget {
-  const VetDashboardScreen({super.key});
+  const VetDashboardScreen({super.key, this.initialTab});
+
+  final String? initialTab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
+      initialIndex: initialTab == '1' ? 1 : 0,
       length: 2,
       child: Scaffold(
         appBar: AppBar(
@@ -46,7 +49,9 @@ class VetDashboardScreen extends ConsumerWidget {
               icon: const Icon(Icons.logout),
               tooltip: 'Cerrar sesión',
               onPressed: () async {
-                await ref.read(authRepositoryProvider).logout();
+                try {
+                  await ref.read(authRepositoryProvider).logout();
+                } catch (_) {}
                 if (context.mounted) context.go('/login');
               },
             ),

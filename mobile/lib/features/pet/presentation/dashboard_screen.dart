@@ -33,7 +33,9 @@ class DashboardScreen extends ConsumerWidget {
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',
             onPressed: () async {
-              await ref.read(authRepositoryProvider).logout();
+              try {
+                await ref.read(authRepositoryProvider).logout();
+              } catch (_) {}
               if (context.mounted) context.go('/login');
             },
           ),
@@ -228,14 +230,7 @@ class _EmptyState extends StatelessWidget {
                 color: theme.colorScheme.tertiary,
               ),
               const SizedBox(height: 28),
-              ElevatedButton.icon(
-                onPressed: onAdd,
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar mi primera mascota'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                ),
-              ),
+              const SizedBox.shrink(),
             ],
           ),
         ),

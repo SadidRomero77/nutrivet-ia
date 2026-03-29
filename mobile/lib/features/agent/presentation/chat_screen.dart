@@ -9,6 +9,7 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart' show Uuid;
 
@@ -306,12 +307,47 @@ class _MessageBubble extends StatelessWidget {
         ),
         child: message.text.isEmpty
             ? _TypingDots()
-            : Text(
-                message.text,
-                style: TextStyle(
-                  color: isUser ? Colors.white : null,
-                ),
-              ),
+            : isUser
+                ? Text(
+                    message.text,
+                    style: const TextStyle(color: Colors.white),
+                  )
+                : MarkdownBody(
+                    data: message.text,
+                    styleSheet: MarkdownStyleSheet(
+                      p: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                      strong: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      em: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      listBullet: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontSize: 14,
+                      ),
+                      horizontalRuleDecoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                            color: theme.colorScheme.outlineVariant,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      blockquote: TextStyle(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    softLineBreak: true,
+                  ),
       ),
     );
   }

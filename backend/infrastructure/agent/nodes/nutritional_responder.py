@@ -26,15 +26,17 @@ logger = logging.getLogger(__name__)
 
 _DISCLAIMER = (
     "\n\n---\n"
-    "*NutriVet.IA es asesoría nutricional digital — "
+    "🩺 *NutriVet.IA es asesoría nutricional digital — "
     "no reemplaza el diagnóstico médico veterinario.*"
 )
 
 # Temperatura baja para respuestas clínicas precisas y consistentes
 _CONVERSATION_TEMPERATURE = 0.4
 
-# Máximo de mensajes del historial a incluir (contexto)
-_MAX_HISTORY_MESSAGES = 12
+# Máximo de mensajes del historial a incluir en el contexto del LLM.
+# 20 mensajes = 10 intercambios completos — suficiente para recuperar hilo
+# de conversaciones de sesiones anteriores sin exceder el context window.
+_MAX_HISTORY_MESSAGES = 20
 
 
 async def stream_nutritional_response(
@@ -43,6 +45,7 @@ async def stream_nutritional_response(
     user_tier: str,
     pet_profile: dict[str, Any] | None = None,
     active_plan: dict[str, Any] | None = None,
+    plan_history: list[dict[str, Any]] | None = None,
     llm_client=None,
 ) -> AsyncGenerator[str, None]:
     """
@@ -83,11 +86,20 @@ async def stream_nutritional_response(
 
     api_key = os.getenv("OPENROUTER_API_KEY", "")
 
-    # Construir system prompt experto con contexto completo de la mascota
+    # Condiciones médicas activas para el bloque fármaco-nutriente (B-06)
+    conditions_list = (
+        pet_profile.get("medical_conditions", [])
+        if pet_profile
+        else []
+    )
+
+    # Construir system prompt experto con contexto completo de la mascota + historial de planes
     system_prompt = build_conversation_system_prompt(
         pet_profile=pet_profile,
         active_plan=active_plan,
         user_tier=user_tier,
+        conditions=conditions_list,
+        plan_history=plan_history or [],
     )
 
     # Construir mensajes con historial (últimos N mensajes)
@@ -113,40 +125,80 @@ async def stream_nutritional_response(
         extra={
             "model": model,
             "user_tier": user_tier,
-            "has_conditions": has_conditions,
+            "has_conditions": conditions_count > 0,
             "has_pet": pet_profile is not None,
             "has_plan": active_plan is not None,
             "history_len": len(history),
         },
     )
 
+    if not api_key:
+        logger.error("OPENROUTER_API_KEY no configurada — no se puede generar respuesta")
+        yield "⚠️ El servicio de IA no está disponible en este momento. Por favor contactá al soporte."
+        yield _DISCLAIMER
+        return
+
     full_response = ""
-    async with httpx.AsyncClient(timeout=90.0) as client:
-        async with client.stream(
-            "POST",
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": "https://nutrivet.ia",
-                "X-Title": "NutriVet.IA",
-            },
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                data = line[6:]
-                if data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data)
-                    delta = chunk["choices"][0]["delta"].get("content", "")
-                    if delta:
-                        full_response += delta
-                        yield delta
-                except (KeyError, json.JSONDecodeError):
-                    continue
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            async with client.stream(
+                "POST",
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "HTTP-Referer": "https://nutrivet-ia.com",
+                    "X-Title": "NutriVet.IA",
+                },
+                json=payload,
+            ) as response:
+                if response.status_code == 401:
+                    logger.error("OpenRouter: API key inválida o sin permisos (401)")
+                    yield "⚠️ El servicio de IA no está disponible en este momento. Por favor contactá al soporte."
+                    yield _DISCLAIMER
+                    return
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        delta = chunk["choices"][0]["delta"].get("content", "")
+                        if delta:
+                            full_response += delta
+                            yield delta
+                    except (KeyError, json.JSONDecodeError):
+                        continue
+    except httpx.TimeoutException:
+        logger.warning("OpenRouter: timeout en streaming response")
+        if not full_response:
+            yield "⏳ La respuesta tardó demasiado. Por favor intentá de nuevo."
+        yield _DISCLAIMER
+        return
+    except httpx.HTTPStatusError as http_err:
+        status_code = http_err.response.status_code
+        # Intentar leer el cuerpo de error para diagnóstico
+        try:
+            error_body = http_err.response.text
+        except Exception:
+            error_body = "(no disponible)"
+        logger.error(
+            "OpenRouter: HTTP error %s en streaming — modelo: %s — body: %s",
+            status_code,
+            model,
+            error_body[:500],
+        )
+        if not full_response:
+            if status_code == 402:
+                yield "⚠️ Créditos de IA insuficientes. Por favor contactá al soporte."
+            elif status_code == 429:
+                yield "⏳ Demasiadas solicitudes. Por favor esperá unos segundos e intentá de nuevo."
+            else:
+                yield "⚠️ No se pudo obtener respuesta del servicio de IA. Por favor intentá de nuevo."
+        yield _DISCLAIMER
+        return
 
     logger.info(
         "nutritional_response_completed",

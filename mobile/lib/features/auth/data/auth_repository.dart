@@ -144,8 +144,11 @@ class AuthRepository {
       refreshToken: tokens.refreshToken,
       role: role,
     );
-    // Registrar token FCM para push notifications (fire-and-forget)
-    PushNotificationService.instance.registerCurrentToken().ignore();
+    // Registrar token FCM — fire-and-forget, nunca debe abortar el login.
+    // try/catch adicional por si Firebase no está inicializado (lanza sincrónicamente).
+    try {
+      PushNotificationService.instance.registerCurrentToken().ignore();
+    } catch (_) {}
     return role;
   }
 
@@ -260,10 +263,19 @@ class AuthRepository {
 
   /// Cierra sesión y elimina tokens locales.
   Future<void> logout() async {
-    // Eliminar token FCM del backend antes del logout
-    await PushNotificationService.instance.unregisterCurrentToken();
     try {
-      await dio.post('/v1/auth/logout');
+      // FCM cleanup dentro del try — si Firebase no está inicializado no rompe
+      // el flujo y deleteTokens() en finally siempre se ejecuta.
+      PushNotificationService.instance.unregisterCurrentToken().ignore();
+      final refreshToken = await storage.readRefreshToken();
+      await dio.post(
+        '/v1/auth/logout',
+        data: {'refresh_token': refreshToken ?? ''},
+        options: Options(
+          sendTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 3),
+        ),
+      );
     } catch (_) {
       // Ignorar errores de red al hacer logout
     } finally {

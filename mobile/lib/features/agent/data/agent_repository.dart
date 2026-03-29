@@ -9,18 +9,11 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/api/api_client.dart';
-import '../../../core/storage/secure_storage.dart';
 
 part 'agent_repository.g.dart';
-
-const _baseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://10.0.2.2:8000',
-);
 
 /// Mensaje del historial de chat para visualización en UI.
 class ChatHistoryMessage {
@@ -48,14 +41,12 @@ class ChatHistoryMessage {
 
 @riverpod
 AgentRepository agentRepository(Ref ref) => AgentRepository(
-      storage: ref.read(secureStorageProvider),
       dio: ref.watch(apiClientProvider),
     );
 
 class AgentRepository {
-  AgentRepository({required this.storage, required this.dio});
+  AgentRepository({required this.dio});
 
-  final SecureStorageService storage;
   final Dio dio;
 
   /// Carga el historial de conversaciones de una mascota para mostrar en UI.
@@ -76,32 +67,32 @@ class AgentRepository {
   /// Envía un mensaje al agente y devuelve un Stream de tokens SSE.
   ///
   /// El stream emite cada chunk de texto a medida que llega del servidor.
-  /// El último evento `[DONE]` cierra el stream.
+  /// Usa Dio para pasar por el interceptor de auth (refresco automático de token).
   Stream<String> sendMessage({
     required String petId,
     required String message,
     required String conversationId,
   }) async* {
-    final token = await storage.readAccessToken();
-    final uri = Uri.parse('$_baseUrl/v1/agent/chat');
-
-    final request = http.Request('POST', uri)
-      ..headers['Authorization'] = 'Bearer ${token ?? ''}'
-      ..headers['Content-Type'] = 'application/json'
-      ..headers['Accept'] = 'text/event-stream'
-      ..body = jsonEncode({
-        'pet_id': petId,
-        'message': message,
-        'conversation_id': conversationId,
-      });
-
-    final response = await http.Client().send(request);
-
-    if (response.statusCode != 200) {
-      throw Exception('Error ${response.statusCode} del agente');
+    final Response<ResponseBody> response;
+    try {
+      response = await dio.post<ResponseBody>(
+        '/v1/agent/chat',
+        data: jsonEncode({'pet_id': petId, 'message': message}),
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream',
+          },
+          responseType: ResponseType.stream,
+        ),
+      );
+    } on DioException catch (e) {
+      throw Exception('Error ${e.response?.statusCode ?? 'desconocido'} del agente');
     }
 
-    await for (final chunk in response.stream
+    final stream = response.data!.stream;
+    await for (final chunk in stream
+        .cast<List<int>>()
         .transform(utf8.decoder)
         .transform(const LineSplitter())) {
       if (chunk.startsWith('data: ')) {
@@ -112,21 +103,18 @@ class AgentRepository {
         try {
           final decoded = jsonDecode(data);
           if (decoded is Map && decoded.containsKey('error')) {
-            final msg = decoded['message'] as String? ??
-                decoded['error'] as String? ??
+            final msg = decoded['error'] as String? ??
+                decoded['message'] as String? ??
                 'Error del agente';
             throw Exception(msg);
           }
           if (decoded is Map && decoded.containsKey('chunk')) {
             yield decoded['chunk'] as String;
-            continue;
           }
         } catch (e) {
           if (e is Exception) rethrow;
-          // No es JSON — emitir como texto plano
+          // No es JSON — ignorar línea
         }
-
-        yield data;
       }
     }
   }

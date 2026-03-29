@@ -93,12 +93,12 @@ class PostgreSQLPlanRepository(IPlanRepository):
         return _to_domain(row) if row else None
 
     async def find_active_by_pet(self, pet_id: uuid.UUID) -> Optional[NutritionPlan]:
-        """Retorna el plan ACTIVE o PENDING_VET de la mascota."""
+        """Retorna el plan ACTIVE o PENDING_VET más reciente de la mascota."""
         result = await self._session.execute(
             select(NutritionPlanModel).where(
                 NutritionPlanModel.pet_id == pet_id,
                 NutritionPlanModel.status.in_(["ACTIVE", "PENDING_VET"]),
-            )
+            ).order_by(NutritionPlanModel.created_at.desc()).limit(1)
         )
         row = result.scalar_one_or_none()
         return _to_domain(row) if row else None
@@ -131,3 +131,20 @@ class PostgreSQLPlanRepository(IPlanRepository):
             )
         )
         return result.scalar() or 0
+
+    async def list_recent_by_pet(
+        self, pet_id: uuid.UUID, limit: int = 3
+    ) -> list[NutritionPlan]:
+        """
+        Lista los planes más recientes de una mascota (activos y archivados).
+
+        Usado por el agente para dar contexto histórico de planes anteriores.
+        Orden: más reciente primero.
+        """
+        result = await self._session.execute(
+            select(NutritionPlanModel)
+            .where(NutritionPlanModel.pet_id == pet_id)
+            .order_by(NutritionPlanModel.created_at.desc())
+            .limit(limit)
+        )
+        return [_to_domain(row) for row in result.scalars().all()]

@@ -117,6 +117,9 @@ class UserAccount:
         )
         instance.full_name = full_name
         instance.phone = phone
+        # MVP: vets se auto-aprueban al crearse (sin flujo de aprobación manual)
+        if role == UserRole.VET:
+            instance.vet_status = "approved"
         return instance
 
     # -- Actualización de perfil --

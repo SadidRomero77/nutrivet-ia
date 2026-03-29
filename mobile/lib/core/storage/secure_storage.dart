@@ -5,8 +5,6 @@
 /// el keyring del sistema no está disponible.
 library;
 
-import 'dart:io' show Platform;
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -18,7 +16,12 @@ const _keyRefresh = 'refresh_token';
 const _keyRole = 'user_role';
 
 /// Proveedor del servicio de almacenamiento seguro.
-@riverpod
+///
+/// keepAlive: true — garantiza una única instancia durante toda la vida de la app.
+/// Evita que el estado _useMemoryFallback y _memoryFallback se pierdan si el
+/// proveedor se auto-destruye y re-crea, lo que causaría lecturas inconsistentes
+/// entre el router y los repositorios.
+@Riverpod(keepAlive: true)
 SecureStorageService secureStorage(Ref ref) => SecureStorageService();
 
 /// Servicio de lectura/escritura de tokens JWT en almacenamiento seguro.
@@ -52,9 +55,21 @@ class SecureStorageService {
   }
 
   Future<void> deleteTokens() async {
-    await _delete(_keyAccess);
-    await _delete(_keyRefresh);
-    await _delete(_keyRole);
+    // Eliminar siempre de memoria Y del almacenamiento real, incluso si estamos
+    // en modo fallback — evita tokens stale que persisten al reiniciar la app.
+    _memoryFallback.remove(_keyAccess);
+    _memoryFallback.remove(_keyRefresh);
+    _memoryFallback.remove(_keyRole);
+    try {
+      await Future.wait([
+        _storage.delete(key: _keyAccess),
+        _storage.delete(key: _keyRefresh),
+        _storage.delete(key: _keyRole),
+      ]);
+    } catch (_) {
+      // Ignorar errores de almacenamiento — los tokens en memoria ya fueron
+      // eliminados; el usuario queda desautenticado en esta sesión.
+    }
   }
 
   Future<bool> hasTokens() async {
@@ -99,16 +114,4 @@ class SecureStorageService {
     }
   }
 
-  Future<void> _delete(String key) async {
-    if (_useMemoryFallback) {
-      _memoryFallback.remove(key);
-      return;
-    }
-    try {
-      await _storage.delete(key: key);
-    } catch (_) {
-      _useMemoryFallback = true;
-      _memoryFallback.remove(key);
-    }
-  }
 }

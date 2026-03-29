@@ -34,21 +34,27 @@ async def intent_classifier(
     Usa el modelo Free tier (llama-3.3-70b) para clasificación — no requiere
     contexto clínico completo, solo semántica del mensaje.
     """
-    client = llm_client or OpenRouterClient()
     message = state.get("message", "")
 
-    response = await client.generate(
-        model="meta-llama/llama-3.3-70b",
-        system_prompt=_SYSTEM_PROMPT,
-        user_prompt=message,
-        temperature=0.0,
-    )
-
+    intent = "consultation"  # fallback seguro si el clasificador falla
     try:
+        client = llm_client or OpenRouterClient()
+        response = await client.generate(
+            model="openai/gpt-4o-mini",
+            system_prompt=_SYSTEM_PROMPT,
+            user_prompt=message,
+            temperature=0.0,
+        )
         parsed = json.loads(response.content)
         intent = parsed.get("intent", "consultation")
     except (json.JSONDecodeError, AttributeError):
-        intent = "consultation"
+        pass
+    except Exception:
+        # LLM no disponible → defaultear a consultation (safe fallback — REGLA 9)
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "intent_classifier: LLM falló — usando fallback 'consultation'"
+        )
 
     valid_intents = {"plan_generation", "consultation", "scanner", "referral", "emergency"}
     if intent not in valid_intents:

@@ -87,14 +87,6 @@ class _VetPatientProfileScreenState
         title: petAsync.whenOrNull(data: (p) => NutrivetTitle(p.name)) ??
             const NutrivetTitle('Paciente clínico'),
         actions: [
-          if (pet != null)
-            IconButton(
-              icon: const Icon(Icons.auto_awesome),
-              tooltip: 'Generar plan',
-              onPressed: () => context.push(
-                '/plan/generate?petId=${pet.petId}&petName=${Uri.encodeComponent(pet.name)}',
-              ),
-            ),
           if (canDelete)
             _deleting
                 ? const Padding(
@@ -185,7 +177,7 @@ class _PatientContent extends StatelessWidget {
           children: [
             _ActionBtn(
               icon: Icons.auto_awesome,
-              label: 'Generar\nplan',
+              label: 'Generar plan',
               color: Colors.deepPurple,
               onTap: () => context.push(
                 '/plan/generate?petId=${pet.petId}&petName=${Uri.encodeComponent(pet.name)}',
@@ -194,7 +186,7 @@ class _PatientContent extends StatelessWidget {
             const SizedBox(width: 8),
             _ActionBtn(
               icon: Icons.list_alt,
-              label: 'Ver\nplanes',
+              label: 'Ver planes',
               color: Colors.blue,
               onTap: () => context.push('/plans?petId=${pet.petId}'),
             ),

@@ -19,7 +19,6 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   bool _loading = false;
-  bool _sent = false;
 
   @override
   void dispose() {
@@ -34,13 +33,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       await ref
           .read(authRepositoryProvider)
           .forgotPassword(_emailCtrl.text.trim());
-      if (mounted) setState(() => _sent = true);
     } catch (_) {
-      // Siempre mostramos éxito — no revelar si el email existe
-      if (mounted) setState(() => _sent = true);
+      // Siempre continuamos — no revelar si el email existe (OWASP A01)
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+    // Navegar siempre a reset-password: el token aparece en los logs del servidor (dev)
+    if (mounted) context.push('/reset-password');
   }
 
   @override
@@ -52,7 +51,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: _sent ? _SuccessView(email: _emailCtrl.text) : _FormView(
+          child: _FormView(
             formKey: _formKey,
             emailCtrl: _emailCtrl,
             loading: _loading,
@@ -147,57 +146,3 @@ class _FormView extends StatelessWidget {
   }
 }
 
-class _SuccessView extends StatelessWidget {
-  const _SuccessView({required this.email});
-
-  final String email;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: 48),
-        const Icon(Icons.mark_email_read_outlined,
-            size: 72, color: Colors.green),
-        const SizedBox(height: 20),
-        Text(
-          'Revisa tu correo',
-          style: theme.textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Si $email está registrado, recibirás un enlace '
-          'para restablecer tu contraseña en los próximos minutos.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'El enlace es válido por 15 minutos.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 40),
-        OutlinedButton.icon(
-          onPressed: () => context.push('/reset-password'),
-          icon: const Icon(Icons.vpn_key_outlined, size: 18),
-          label: const Text('Ya tengo el código'),
-        ),
-        const SizedBox(height: 12),
-        TextButton(
-          onPressed: () => context.go('/login'),
-          child: const Text('Volver al inicio de sesión'),
-        ),
-      ],
-    );
-  }
-}

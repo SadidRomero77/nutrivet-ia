@@ -40,3 +40,14 @@ class IPlanRepository(ABC):
     @abstractmethod
     async def count_active_by_owner(self, owner_id: uuid.UUID) -> int:
         """Cuenta los planes ACTIVE o PENDING_VET del owner (para límite de tier)."""
+
+    @abstractmethod
+    async def list_recent_by_pet(
+        self, pet_id: uuid.UUID, limit: int = 3
+    ) -> list[NutritionPlan]:
+        """
+        Lista los planes más recientes de una mascota (activos y archivados).
+
+        Usado por el agente para dar contexto histórico de planes anteriores.
+        Orden: más reciente primero.
+        """

@@ -139,13 +139,19 @@ class PetProfileUseCase:
         pet = await self._pet_repo.find_by_id(pet_id)
         if pet is None:
             raise DomainError(f"Mascota con ID '{pet_id}' no encontrada.")
+        # owner puede editar su mascota; vet puede editar sus pacientes clínicos
+        # (clinic patients tienen owner_id = vet_id)
         if pet.owner_id != requester_id:
-            raise DomainError("Acceso denegado: no eres el dueño de esta mascota.")
+            # Verificar si es vet asignado
+            is_assigned_vet = getattr(pet, 'vet_id', None) == requester_id
+            if not is_assigned_vet:
+                raise DomainError("Acceso denegado: no eres el dueño de esta mascota.")
 
         from backend.domain.aggregates.pet_profile import (
             CatActivityLevel,
             CurrentDiet as CurrentDietEnum,
             DogActivityLevel,
+            MedicalCondition,
             Species,
         )
         if 'activity_level' in update_data and isinstance(update_data['activity_level'], str):
@@ -157,6 +163,12 @@ class PetProfileUseCase:
                 update_data['activity_level'] = CatActivityLevel(al_str)
         if 'current_diet' in update_data and isinstance(update_data['current_diet'], str):
             update_data['current_diet'] = CurrentDietEnum(update_data['current_diet'])
+        if 'medical_conditions' in update_data:
+            raw = update_data['medical_conditions']
+            if isinstance(raw, list):
+                update_data['medical_conditions'] = [
+                    MedicalCondition(c) if isinstance(c, str) else c for c in raw
+                ]
 
         for field_name, value in update_data.items():
             if hasattr(pet, field_name):

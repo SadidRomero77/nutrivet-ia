@@ -1,6 +1,8 @@
 /// Repositorio de planes nutricionales — lectura, exportación y cache offline.
 library;
 
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -494,16 +496,17 @@ class PlanRepository {
 
   /// Lista resúmenes de planes. Usa cache Hive si sin red.
   Future<List<PlanSummary>> listPlans() async {
-    final box = await Hive.openBox<Map>(_summaryBoxName);
+    final box = await Hive.openBox<String>(_summaryBoxName);
     try {
       final response = await dio.get<List<dynamic>>('/v1/plans');
       final plans = (response.data!)
-          .map((e) => PlanSummary.fromJson(e as Map<String, dynamic>))
+          .map((e) => PlanSummary.fromJson(
+              Map<String, dynamic>.from(e as Map)))
           .toList();
       // Actualizar cache local
       await box.clear();
       for (final plan in plans) {
-        await box.put(plan.planId, {
+        await box.put(plan.planId, json.encode({
           'plan_id': plan.planId,
           'pet_id': plan.petId,
           'status': plan.status,
@@ -511,32 +514,34 @@ class PlanRepository {
           'rer_kcal': plan.rerKcal,
           'der_kcal': plan.derKcal,
           'llm_model_used': plan.llmModelUsed,
-        });
+        }));
       }
       return plans;
     } on DioException {
       // Fallback offline: devolver desde cache
       return box.values
-          .map((e) => PlanSummary.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => PlanSummary.fromJson(
+              json.decode(e) as Map<String, dynamic>))
           .toList();
     }
   }
 
   /// Carga el detalle completo de un plan. Usa cache Hive si sin red.
   Future<PlanDetail> getPlan(String planId) async {
-    final box = await Hive.openBox<Map>(_detailBoxName);
+    final box = await Hive.openBox<String>(_detailBoxName);
     try {
       final response =
           await dio.get<Map<String, dynamic>>('/v1/plans/$planId');
       final plan = PlanDetail.fromJson(response.data!);
-      // Guardar en cache
-      await box.put(planId, response.data!);
+      // Guardar en cache como JSON string para evitar Map<dynamic,dynamic> en Hive
+      await box.put(planId, json.encode(response.data!));
       return plan;
     } on DioException {
       // Fallback offline
       final cached = box.get(planId);
       if (cached != null) {
-        return PlanDetail.fromJson(Map<String, dynamic>.from(cached));
+        return PlanDetail.fromJson(
+            json.decode(cached) as Map<String, dynamic>);
       }
       rethrow;
     }

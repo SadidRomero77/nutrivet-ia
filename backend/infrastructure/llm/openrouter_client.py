@@ -102,8 +102,20 @@ class OpenRouterClient:
         for attempt in range(3):  # 3 intentos: 0, 1, 2
             try:
                 return await self._call(current_model, system_prompt, user_prompt, temperature, max_tokens)
-            except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
+            except (httpx.TimeoutException, httpx.HTTPStatusError, ValueError) as e:
                 last_error = e
+
+                # Manejar 429 Rate Limit con Retry-After del header
+                if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429:
+                    retry_after = float(e.response.headers.get("Retry-After", _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]))
+                    retry_after = min(retry_after, 60.0)  # cap a 60s para evitar bloqueos largos
+                    logger.warning(
+                        "OpenRouter 429 rate limit en '%s' — esperando %.1fs (intento %d/3)",
+                        current_model, retry_after, attempt + 1,
+                    )
+                    await asyncio.sleep(retry_after)
+                    continue
+
                 if attempt < len(_RETRY_DELAYS):
                     await asyncio.sleep(_RETRY_DELAYS[attempt])
                 else:

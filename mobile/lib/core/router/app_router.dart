@@ -44,7 +44,7 @@ import '../storage/secure_storage.dart';
 
 part 'app_router.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 GoRouter appRouter(Ref ref) {
   final storage = ref.watch(secureStorageProvider);
 
@@ -228,7 +228,9 @@ GoRouter appRouter(Ref ref) {
       // ── Vet routes ───────────────────────────────────────────────────────
       GoRoute(
         path: '/vet/dashboard',
-        builder: (_, __) => const VetDashboardScreen(),
+        builder: (_, state) => VetDashboardScreen(
+          initialTab: state.uri.queryParameters['tab'],
+        ),
       ),
       GoRoute(
         path: '/vet/patient/:petId',

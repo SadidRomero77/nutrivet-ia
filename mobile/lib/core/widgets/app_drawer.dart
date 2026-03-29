@@ -34,10 +34,12 @@ class AppDrawer extends ConsumerWidget {
     final isVet = profile?.role == 'vet';
     final isAdmin = profile?.role == 'admin';
 
-    // Carga síncrona: owners usan petsProvider, vets usan vetPatientsProvider
-    final pets = isVet
-        ? <PetModel>[]
-        : (ref.watch(petsProvider).valueOrNull ?? []);
+    // Carga síncrona: owners usan petsProvider, vets usan vetPatientsProvider.
+    // Sólo se observa petsProvider cuando ya sabemos que el rol es owner para
+    // evitar llamadas 403 en cuentas vet (profileAsync aún loading → isVet=false).
+    final pets = (profile != null && !isVet && !isAdmin)
+        ? (ref.watch(petsProvider).valueOrNull ?? [])
+        : <PetModel>[];
     final vetPets = isVet
         ? (ref.watch(vetPatientsProvider).valueOrNull ?? <PetModel>[])
         : <PetModel>[];
@@ -158,7 +160,7 @@ class AppDrawer extends ConsumerWidget {
                     title: 'Mis pacientes',
                     onTap: () {
                       Navigator.pop(context);
-                      context.go('/vet/dashboard');
+                      context.go('/vet/dashboard?tab=1');
                     },
                   ),
                   _DrawerItem(
@@ -170,39 +172,12 @@ class AppDrawer extends ConsumerWidget {
                     },
                   ),
                   _DrawerItem(
-                    icon: Icons.auto_awesome_outlined,
-                    title: 'Generar plan',
-                    onTap: () {
-                      Navigator.pop(context);
-                      if (vetPets.isEmpty) {
-                        _snackNoMascota(context);
-                        return;
-                      }
-                      if (vetPets.length == 1) {
-                        context.push(
-                          '/plan/generate?petId=${vetPets.first.petId}'
-                          '&petName=${Uri.encodeComponent(vetPets.first.name)}',
-                        );
-                        return;
-                      }
-                      showPetPickerSheet(
-                        context: context,
-                        pets: vetPets,
-                        title: 'Generar plan para...',
-                        onPick: (pet) => context.push(
-                          '/plan/generate?petId=${pet.petId}'
-                          '&petName=${Uri.encodeComponent(pet.name)}',
-                        ),
-                      );
-                    },
-                  ),
-                  _DrawerItem(
                     icon: Icons.chat_bubble_outline,
                     title: 'Consultar al agente',
                     onTap: () {
                       Navigator.pop(context);
                       if (vetPets.isEmpty) {
-                        _snackNoMascota(context);
+                        _snackNoPaciente(context);
                         return;
                       }
                       if (vetPets.length == 1) {
@@ -387,9 +362,15 @@ class AppDrawer extends ConsumerWidget {
             title: 'Cerrar sesión',
             iconColor: Theme.of(context).colorScheme.error,
             onTap: () async {
+              // Capturar router y authRepo ANTES del pop — el context y ref del
+              // drawer quedan inválidos después de Navigator.pop (widget desmontado).
+              final router = GoRouter.of(context);
+              final authRepo = ref.read(authRepositoryProvider);
               Navigator.pop(context);
-              await ref.read(authRepositoryProvider).logout();
-              if (context.mounted) context.go('/login');
+              try {
+                await authRepo.logout();
+              } catch (_) {}
+              router.go('/login');
             },
           ),
           const SizedBox(height: 8),
@@ -402,6 +383,14 @@ class AppDrawer extends ConsumerWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Primero registra una mascota'),
+      ),
+    );
+  }
+
+  void _snackNoPaciente(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Agrega un paciente primero'),
       ),
     );
   }

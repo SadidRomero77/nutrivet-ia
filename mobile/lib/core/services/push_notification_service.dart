@@ -33,11 +33,27 @@ class PushNotificationService {
 
   static final PushNotificationService instance = PushNotificationService._();
 
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  // Inicialización lazy — NO acceder FirebaseMessaging.instance en el field
+  // initializer porque Firebase puede no estar inicializado todavía.
+  // Si se accede antes de Firebase.initializeApp(), lanza FirebaseException
+  // sincrónicamente y rompe login/logout antes de que .ignore() actúe.
+  FirebaseMessaging? _fcm;
+
+  /// Retorna la instancia de FirebaseMessaging, o null si Firebase no está listo.
+  FirebaseMessaging? _getMessaging() {
+    if (_fcm != null) return _fcm;
+    try {
+      _fcm = FirebaseMessaging.instance;
+    } catch (_) {
+      // Firebase no inicializado — FCM desactivado en esta sesión
+    }
+    return _fcm;
+  }
+
   final Dio _dio = Dio(BaseOptions(
     baseUrl: const String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://10.0.2.2:8000',
+      defaultValue: 'http://localhost:8000',
     ),
     headers: {'Content-Type': 'application/json'},
     connectTimeout: const Duration(seconds: 10),
@@ -56,11 +72,18 @@ class PushNotificationService {
   Future<void> initialize() async {
     if (_initialized) return;
 
+    final messaging = _getMessaging();
+    if (messaging == null) {
+      debugPrint('[FCM] Firebase no inicializado — PushNotificationService desactivado.');
+      _initialized = true;
+      return;
+    }
+
     // Registrar handler de background
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
     // Solicitar permisos (iOS muestra diálogo, Android 13+ también)
-    final settings = await _fcm.requestPermission(
+    final settings = await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -74,7 +97,7 @@ class PushNotificationService {
     }
 
     // Escuchar refrescos del token
-    _fcm.onTokenRefresh.listen((newToken) async {
+    messaging.onTokenRefresh.listen((newToken) async {
       await _registerToken(newToken);
     });
 
@@ -97,10 +120,11 @@ class PushNotificationService {
   /// Llamar después de login exitoso.
   Future<void> registerCurrentToken() async {
     try {
-      // En web no hay token FCM nativo
       if (kIsWeb) return;
+      final messaging = _getMessaging();
+      if (messaging == null) return;
 
-      final token = await _fcm.getToken();
+      final token = await messaging.getToken();
       if (token == null) {
         debugPrint('[FCM] No se pudo obtener token FCM.');
         return;
@@ -117,8 +141,10 @@ class PushNotificationService {
   Future<void> unregisterCurrentToken() async {
     try {
       if (kIsWeb) return;
+      final messaging = _getMessaging();
+      if (messaging == null) return;
 
-      final token = await _fcm.getToken();
+      final token = await messaging.getToken();
       if (token == null) return;
 
       final authToken = await _storage.readAccessToken();

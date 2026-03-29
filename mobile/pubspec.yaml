@@ -47,6 +47,9 @@ dependencies:
   # Open URLs externas (PayU checkout, PDF compartir)
   url_launcher: ^6.3.0
 
+  # Markdown rendering (respuestas del agente con emojis y estructura)
+  flutter_markdown: ^0.7.3
+
   # Utils
   crypto: ^3.0.3
   intl: ^0.19.0

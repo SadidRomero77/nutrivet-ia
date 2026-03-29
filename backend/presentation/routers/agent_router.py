@@ -15,8 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+
 
 from backend.infrastructure.agent.nodes.intent_classifier import intent_classifier
 from backend.infrastructure.agent.nodes.load_context import load_context
@@ -56,8 +55,8 @@ from backend.presentation.schemas.scan_schemas import ScanResult
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent"])
 
-# Rate limiter compartido (instancia configurada en main.py via app.state.limiter)
-_limiter = Limiter(key_func=get_remote_address)
+# Rate limiter compartido — misma instancia que app.state.limiter
+from backend.presentation.rate_limiter import limiter as _limiter
 
 # Restricciones para upload de imágenes en /v1/agent/scan
 _ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -317,10 +316,25 @@ async def chat(
         requires_vet_review=False,
     )
 
+    # Cargar contexto completo de la mascota (pet_profile + plan activo)
+    # Constitution REGLA 9: el agente necesita el perfil para responder sin pedir datos ya conocidos.
+    if body.pet_id:
+        try:
+            context_state = await load_context(
+                initial_state,
+                pet_repo=PostgreSQLPetRepository(session),
+                plan_repo=PostgreSQLPlanRepository(session),
+            )
+            # Preservar solo si no hubo error de acceso
+            if not context_state.get("error"):
+                initial_state = context_state
+        except Exception as ctx_err:
+            logger.warning("No se pudo cargar contexto de mascota: %s", ctx_err)
+
     # Cargar historial previo si hay pet_id
     if body.pet_id:
         try:
-            history = await conversation_repo.list_by_pet(body.pet_id, limit=10)
+            history = await conversation_repo.list_by_pet(body.pet_id, limit=20)
             initial_state = {**initial_state, "conversation_history": history}
         except Exception as hist_err:
             logger.warning("No se pudo cargar historial conversacional: %s", hist_err)
