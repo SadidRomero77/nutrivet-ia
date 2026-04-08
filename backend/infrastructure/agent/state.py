@@ -35,6 +35,7 @@ class NutriVetState(TypedDict, total=False):
     bcs_phase: Optional[str]
     medical_restrictions: list[str]       # Lista de restricciones hard-coded (REGLA 2)
     allergy_list: list[str]
+    toxic_allergies_detected: list[str]   # Alergias que coinciden con TOXIC_DOGS/TOXIC_CATS (Nodo 4)
 
     # LLM
     llm_model: Optional[str]             # Modelo seleccionado por LLMRouter (REGLA 5)

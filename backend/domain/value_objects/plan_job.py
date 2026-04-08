@@ -35,6 +35,8 @@ class PlanJob:
     status: PlanJobStatus = PlanJobStatus.QUEUED
     plan_id: Optional[uuid.UUID] = None
     error_message: Optional[str] = None
+    progress_step: int = 0
+    progress_message: str = ""
     created_at: datetime = field(default_factory=_now)
     updated_at: datetime = field(default_factory=_now)
 
@@ -53,4 +55,10 @@ class PlanJob:
         """Transición PROCESSING → FAILED con mensaje de error."""
         self.status = PlanJobStatus.FAILED
         self.error_message = error_message
+        self.updated_at = _now()
+
+    def update_progress(self, step: int, message: str) -> None:
+        """Actualiza el progreso del job sin cambiar el status (para polling)."""
+        self.progress_step = step
+        self.progress_message = message
         self.updated_at = _now()

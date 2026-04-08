@@ -38,6 +38,9 @@ class VetDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Conteo de planes pendientes para el badge del tab — null mientras carga
+    final pendingCount = ref.watch(_pendingPlansProvider).valueOrNull?.length;
+
     return DefaultTabController(
       initialIndex: initialTab == '1' ? 1 : 0,
       length: 2,
@@ -56,10 +59,18 @@ class VetDashboardScreen extends ConsumerWidget {
               },
             ),
           ],
-          bottom: const TabBar(
+          bottom: TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.pending_actions), text: 'Revisión'),
-              Tab(icon: Icon(Icons.pets), text: 'Pacientes'),
+              Tab(
+                text: 'Revisión',
+                icon: pendingCount != null && pendingCount > 0
+                    ? Badge(
+                        label: Text('$pendingCount'),
+                        child: const Icon(Icons.pending_actions),
+                      )
+                    : const Icon(Icons.pending_actions),
+              ),
+              const Tab(icon: Icon(Icons.pets), text: 'Pacientes'),
             ],
           ),
         ),

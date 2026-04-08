@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -130,9 +131,22 @@ async def create_checkout(
     )
 
     if result_checkout is None:
-        # PayU no configurado — modo dev: aprobar directamente
+        # PayU no configurado.
+        # La auto-aprobación solo se activa si PAYU_DEV_AUTO_APPROVE=true (explícito).
+        # En producción o staging sin esta variable, el checkout falla con error claro.
+        dev_auto_approve = os.getenv("PAYU_DEV_AUTO_APPROVE", "false").lower() == "true"
+        if not dev_auto_approve:
+            logger.error(
+                "PayU no configurado y PAYU_DEV_AUTO_APPROVE no está activo. "
+                "Define PAYU_MERCHANT_ID, PAYU_API_KEY y PAYU_API_LOGIN, "
+                "o usa PAYU_DEV_AUTO_APPROVE=true solo en entornos de desarrollo.",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="El servicio de pagos no está disponible en este momento.",
+            )
         logger.warning(
-            "PayU no configurado — simulando aprobación para tier=%s user=%s",
+            "PAYU_DEV_AUTO_APPROVE=true — simulando aprobación para tier=%s user=%s",
             tier, user.user_id,
         )
         await _approve_payment(reference_code=reference_code)
@@ -279,10 +293,10 @@ async def _approve_payment_in_session(
     await session.execute(
         update(UserModel)
         .where(UserModel.id == user_id)
-        .values(tier=tier_enum.value)
+        .values(tier=tier_enum.value, subscription_status="active")
     )
 
-    logger.info("Tier actualizado: user=%s → %s", user_id, tier)
+    logger.info("Tier y subscription_status actualizados: user=%s → %s", user_id, tier)
 
     # Push notification: confirmar upgrade al usuario
     try:
@@ -304,7 +318,7 @@ async def _approve_payment_in_session(
 @router.get("/v1/subscriptions/history", response_model=list[dict], summary="Historial de pagos del usuario")
 async def get_payment_history(
     session: AsyncSession = Depends(get_db_session),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("owner")),
 ) -> list[dict]:
     """Retorna los pagos del usuario autenticado ordenados por fecha descendente."""
     result = await session.execute(

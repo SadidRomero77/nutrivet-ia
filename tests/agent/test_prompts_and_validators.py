@@ -620,9 +620,8 @@ class TestNutritionalValidator:
         assert not result.is_valid
         assert any("GRASA" in e for e in result.blocking_errors)
 
-    def test_desviacion_calorica_genera_warning(self, plan_valido) -> None:
-        """DER 534 pero plan tiene ~130 kcal → warning de desviación calórica."""
-        plan_low = dict(plan_valido)
+    def test_desviacion_calorica_bloquea_plan(self, plan_valido) -> None:
+        """DER 534 pero plan tiene ~92 kcal → blocking_error de desviación calórica (>20%)."""
         plan_low = {
             **plan_valido,
             "ingredientes": [
@@ -635,11 +634,12 @@ class TestNutritionalValidator:
             der_kcal=534.0, rer_kcal=396.0, allergies=[],
             medical_restrictions=[], age_months=96,
         )
-        # No bloquea pero genera warning (desviación >20%)
-        assert any("calóric" in w.lower() for w in result.warnings)
+        # Desviación del 83% → bloqueante (>20% es inaceptable clínicamente)
+        assert not result.is_valid
+        assert any("calóric" in e.lower() for e in result.blocking_errors)
 
     def test_ratio_ca_p_fuera_de_rango_bloquea(self) -> None:
-        """Ratio Ca:P fuera de 0.8-2.5 → blocking error."""
+        """Ratio Ca:P fuera del rango NRC 1.0-2.0 → blocking error."""
         plan = {
             "perfil_nutricional": {
                 "rer_kcal": 396.0, "der_kcal": 534.0,
@@ -716,8 +716,9 @@ class TestNutritionalValidator:
             der_kcal=400.0, rer_kcal=200.0, allergies=[],
             medical_restrictions=[], age_months=6,  # cachorro
         )
-        # Para cachorro, 19% < 22% → debe generar warning
-        assert any("proteína" in w.lower() or "PROTEÍNA" in w for w in result.warnings)
+        # Para cachorro, 19% < 22% → blocking_error (NRC mínimo obligatorio)
+        assert not result.is_valid
+        assert any("proteína" in e.lower() or "PROTEÍNA" in e for e in result.blocking_errors)
 
     def test_sally_golden_case_plan_valido(self) -> None:
         """Caso Sally: perro French Poodle 10.08kg con 5 condiciones → validación pasa."""

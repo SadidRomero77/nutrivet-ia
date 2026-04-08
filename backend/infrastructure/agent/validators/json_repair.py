@@ -150,6 +150,45 @@ def safe_parse_plan_json(raw: str, der_kcal: float) -> dict[str, Any]:
             "El plan no tiene ingredientes válidos — el LLM no generó la lista de ingredientes"
         )
 
+    # Validar estructura de cada ingrediente con Pydantic (H5 — auditoría pre-deploy)
+    # Captura: cantidad_g=0, kcal=0, fuente inválida, nombre vacío.
+    # La validación es permisiva: errores → warnings en alertas_propietario, no bloquean.
+    # Excepciones reales (cantidad_g negativa, nombre vacío) → ValueError bloqueante.
+    from backend.infrastructure.agent.prompts.json_schemas import IngredienteSchema
+    from pydantic import ValidationError
+
+    ingredientes_validados: list[dict] = []
+    schema_warnings: list[str] = []
+
+    for idx, ing in enumerate(ingredientes):
+        if not isinstance(ing, dict):
+            schema_warnings.append(f"Ingrediente #{idx + 1} no es un objeto dict válido — ignorado")
+            continue
+        try:
+            validated = IngredienteSchema.model_validate(ing)
+            ingredientes_validados.append(validated.model_dump(exclude_none=True))
+        except ValidationError as ve:
+            # Extraer el primer error del ValidationError
+            first_err = ve.errors()[0]
+            field = ".".join(str(x) for x in first_err.get("loc", ["?"]))
+            msg = first_err.get("msg", "error desconocido")
+            schema_warnings.append(
+                f"Ingrediente '{ing.get('nombre', f'#{idx + 1}')}': campo '{field}' inválido — {msg}"
+            )
+            # Conservar el ingrediente original si el nombre está presente (no descartar)
+            if ing.get("nombre", "").strip():
+                ingredientes_validados.append(ing)
+
+    if ingredientes_validados:
+        parsed["ingredientes"] = ingredientes_validados
+
+    if schema_warnings:
+        if "alertas_propietario" not in parsed:
+            parsed["alertas_propietario"] = []
+        parsed["alertas_propietario"].extend([
+            f"⚠ Validación de estructura: {w}" for w in schema_warnings
+        ])
+
     # Verificar coherencia calórica básica (advertencia, no error bloqueante)
     perfil = parsed.get("perfil_nutricional", {})
     kcal_verificadas = perfil.get("kcal_verificadas", 0)

@@ -14,8 +14,16 @@ from backend.infrastructure.agent.nodes.emergency_detector import emergency_dete
 from backend.infrastructure.agent.nodes.referral_node import referral_node
 from backend.infrastructure.agent.orchestrator import build_orchestrator
 from backend.infrastructure.agent.state import NutriVetState
-from backend.infrastructure.agent.subgraphs.consultation_stub import consultation_stub
-from backend.infrastructure.agent.subgraphs.scanner_stub import scanner_stub
+
+
+async def _consultation_stub(state: NutriVetState) -> NutriVetState:
+    """Stub de consulta nutricional para tests de orquestador."""
+    return {**state, "response": "Respuesta nutricional de prueba."}
+
+
+async def _scanner_stub(state: NutriVetState) -> NutriVetState:
+    """Stub de scanner para tests de orquestador."""
+    return {**state, "response": "Resultado de escaneo de prueba.", "scan_semaphore": "VERDE"}
 
 
 def _make_load_context_mock(with_pet: bool = True) -> AsyncMock:
@@ -68,8 +76,8 @@ def _build_test_orchestrator(intent: str = "consultation", with_pet: bool = True
         load_context_fn=_make_load_context_mock(with_pet=with_pet),
         intent_classifier_fn=_make_intent_classifier_mock(intent),
         plan_generation_fn=_make_plan_generation_mock(),
-        consultation_fn=consultation_stub,
-        scanner_fn=scanner_stub,
+        consultation_fn=_consultation_stub,
+        scanner_fn=_scanner_stub,
     )
 
 
@@ -155,7 +163,7 @@ class TestOrchestrator:
             agent_traces=[], conversation_history=[],
             medical_restrictions=[], allergy_list=[], requires_vet_review=False,
         )
-        result = await consultation_stub(state)
+        result = await _consultation_stub(state)
         assert result.get("response") is not None
         assert len(result["response"]) > 0
 
@@ -168,6 +176,6 @@ class TestOrchestrator:
             agent_traces=[], conversation_history=[],
             medical_restrictions=[], allergy_list=[], requires_vet_review=False,
         )
-        result = await scanner_stub(state)
+        result = await _scanner_stub(state)
         assert result.get("response") is not None
         assert len(result["response"]) > 0

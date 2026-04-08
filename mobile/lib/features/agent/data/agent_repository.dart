@@ -15,6 +15,46 @@ import '../../../core/api/api_client.dart';
 
 part 'agent_repository.g.dart';
 
+/// Estado de cuota del agente conversacional para el tier Free.
+class AgentQuota {
+  const AgentQuota({
+    required this.isFreeTier,
+    required this.canAsk,
+    this.dailyCount,
+    this.dailyLimit,
+    this.totalCount,
+    this.totalLimit,
+  });
+
+  factory AgentQuota.fromJson(Map<String, dynamic> json) => AgentQuota(
+        isFreeTier: json['is_free_tier'] as bool,
+        canAsk: json['can_ask'] as bool,
+        dailyCount: json['daily_count'] as int?,
+        dailyLimit: json['daily_limit'] as int?,
+        totalCount: json['total_count'] as int?,
+        totalLimit: json['total_limit'] as int?,
+      );
+
+  /// Cuota ilimitada — usado como valor por defecto antes de cargar o en tiers pagados.
+  factory AgentQuota.unlimited() => const AgentQuota(
+        isFreeTier: false,
+        canAsk: true,
+      );
+
+  final bool isFreeTier;
+  final bool canAsk;
+  final int? dailyCount;
+  final int? dailyLimit;
+  final int? totalCount;
+  final int? totalLimit;
+
+  /// Texto del badge "2/3 hoy" — null si el tier es pagado (no mostrar).
+  String? get badgeText {
+    if (!isFreeTier || dailyCount == null || dailyLimit == null) return null;
+    return '${dailyCount}/${dailyLimit} hoy';
+  }
+}
+
 /// Mensaje del historial de chat para visualización en UI.
 class ChatHistoryMessage {
   const ChatHistoryMessage({
@@ -49,6 +89,17 @@ class AgentRepository {
 
   final Dio dio;
 
+  /// Obtiene el estado de cuota del agente para el usuario actual.
+  Future<AgentQuota> getQuota() async {
+    try {
+      final response =
+          await dio.get<Map<String, dynamic>>('/v1/agent/quota');
+      return AgentQuota.fromJson(response.data!);
+    } on DioException {
+      return AgentQuota.unlimited(); // Si falla → no bloquear el chat
+    }
+  }
+
   /// Carga el historial de conversaciones de una mascota para mostrar en UI.
   Future<List<ChatHistoryMessage>> loadHistory(String petId) async {
     try {
@@ -71,7 +122,6 @@ class AgentRepository {
   Stream<String> sendMessage({
     required String petId,
     required String message,
-    required String conversationId,
   }) async* {
     final Response<ResponseBody> response;
     try {

@@ -161,28 +161,6 @@ class NRCCalculator:
     def get_ideal_weight_estimate(cls, weight_kg: float, bcs: int) -> float:
         """Compatibilidad hacia atrás — usa lógica de perro. Usar get_ideal_weight_by_species."""
         return cls.get_ideal_weight_by_species(weight_kg, bcs, "perro")
-        """
-        Estima el peso ideal a partir del peso real y el BCS.
-
-        Cada unidad de BCS por encima de 5 representa aproximadamente un 10%
-        de exceso de grasa corporal. Para BCS por debajo de 5, el animal está
-        por debajo del peso ideal.
-
-        Usado en el Weight Journey para calcular RER sobre peso ideal en fase
-        de reducción (BCS ≥ 7).
-
-        Args:
-            weight_kg: Peso real del animal en kg.
-            bcs: Body Condition Score (1-9).
-
-        Returns:
-            Peso ideal estimado en kg.
-        """
-        if bcs == 5:
-            return weight_kg
-        # Factor de ajuste: 10% por unidad de BCS respecto al ideal (BCS 5)
-        excess_factor = 1.0 + (bcs - 5) * 0.1
-        return weight_kg / excess_factor
 
     # --- Métodos privados ---
 

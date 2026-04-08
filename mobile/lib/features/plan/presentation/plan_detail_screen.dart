@@ -1272,6 +1272,7 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
   String? _jobId;
   String? _errorMsg;
   int _currentStep = 0; // 0=idle, 1=encolando, 2=calculando, 3=generando, 4=verificando
+  String _progressMessage = ''; // Mensaje del backend en tiempo real
 
   static const _steps = [
     (Icons.schedule, 'Encolando solicitud'),
@@ -1332,14 +1333,23 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
 
   Future<void> _pollUntilReady(PlanRepository repo) async {
     if (_jobId == null) return;
-    // Hasta 10 minutos: 120 intentos × 5s = 600s
-    for (var i = 0; i < 120; i++) {
-      await Future<void>.delayed(const Duration(seconds: 5));
+    // Hasta 10 minutos: 200 intentos × 3s = 600s
+    for (var i = 0; i < 200; i++) {
+      await Future<void>.delayed(const Duration(seconds: 3));
       if (!mounted) return;
       try {
         final job = await repo.getJobStatus(_jobId!);
-        // Avanzar pasos según el tiempo transcurrido para dar feedback visual
-        setState(() => _currentStep = _stepFromIteration(i, job.status));
+        // Usar progreso real del backend si está disponible; sino, estimar por tiempo
+        final step = job.progressStep > 0
+            ? _backendStepToUiStep(job.progressStep)
+            : _stepFromIteration(i, job.status);
+        final message = job.progressMessage.isNotEmpty
+            ? job.progressMessage
+            : '';
+        setState(() {
+          _currentStep = step;
+          _progressMessage = message;
+        });
         if (job.isReady && job.planId != null) {
           await repo.clearActiveJob(widget.petId);
           if (mounted) context.go('/plan/${job.planId}');
@@ -1350,6 +1360,7 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
           setState(() {
             _loading = false;
             _currentStep = 0;
+            _progressMessage = '';
             _errorMsg = 'No fue posible generar el plan. Intenta de nuevo o contacta soporte.';
           });
           return;
@@ -1363,9 +1374,18 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
     setState(() {
       _loading = false;
       _currentStep = 0;
+      _progressMessage = '';
       _errorMsg = 'La generación está tomando más de lo esperado. '
           'Revisa "Mis planes" en unos minutos — el plan puede estar listo.';
     });
+  }
+
+  /// Mapea el paso del backend (1-10) al paso visual de la UI (1-4).
+  int _backendStepToUiStep(int backendStep) {
+    if (backendStep <= 2) return 1;
+    if (backendStep <= 5) return 2;
+    if (backendStep == 6) return 3;
+    return 4; // pasos 7-10
   }
 
   int _stepFromIteration(int iteration, String status) {
@@ -1438,7 +1458,11 @@ class _GeneratePlanScreenState extends ConsumerState<GeneratePlanScreen> {
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: _loading
-            ? _GenerationProgress(currentStep: _currentStep, steps: _steps)
+            ? _GenerationProgress(
+                currentStep: _currentStep,
+                steps: _steps,
+                progressMessage: _progressMessage,
+              )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1506,10 +1530,14 @@ class _GenerationProgress extends StatelessWidget {
   const _GenerationProgress({
     required this.currentStep,
     required this.steps,
+    this.progressMessage = '',
   });
 
   final int currentStep;
   final List<(IconData, String)> steps;
+
+  /// Mensaje en tiempo real proveniente del backend (vacío = no disponible).
+  final String progressMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -1534,12 +1562,20 @@ class _GenerationProgress extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Esto puede tomar entre 30 segundos y 2 minutos.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: Text(
+                progressMessage.isNotEmpty
+                    ? progressMessage
+                    : 'Esto puede tomar entre 30 segundos y 2 minutos.',
+                key: ValueKey(progressMessage),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: progressMessage.isNotEmpty
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
             ...steps.asMap().entries.map((entry) {

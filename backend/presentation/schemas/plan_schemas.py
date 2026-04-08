@@ -223,6 +223,8 @@ class PlanJobResponse(BaseModel):
     status: str  # QUEUED | PROCESSING | READY | FAILED
     plan_id: Optional[UUID] = None
     error_message: Optional[str] = None
+    progress_step: int = 0      # 0-10: paso actual del worker (0 = no iniciado)
+    progress_message: str = ""  # Descripción legible del paso actual
 
 
 class SubstituteResponse(BaseModel):

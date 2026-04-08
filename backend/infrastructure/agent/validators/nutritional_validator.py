@@ -21,7 +21,7 @@ Uso:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from backend.infrastructure.agent.prompts.condition_protocols import (
@@ -94,19 +94,22 @@ def validate_nutritional_plan(
     ingredientes = _extract_ingredients(plan_content)
 
     # ── 1. Coherencia calórica ────────────────────────────────────────────────
+    # El prompt anti-alucinación exige ±10%. Desviación >20% es clínicamente inaceptable
+    # (especialmente en diabetes, obesidad, ERC) — se bloquea el plan.
     kcal_suma = sum(_get_float(i, "kcal") for i in ingredientes)
     if kcal_suma > 0 and der_kcal > 0:
         desviacion = abs(kcal_suma - der_kcal) / der_kcal
         if desviacion > 0.20:
-            warnings.append(
-                f"ADVERTENCIA CALÓRICA: Plan suma {kcal_suma:.0f} kcal "
+            blocking_errors.append(
+                f"DESVIACIÓN CALÓRICA CRÍTICA: Plan suma {kcal_suma:.0f} kcal "
                 f"vs DER de {der_kcal:.0f} kcal ({desviacion:.1%} de diferencia). "
-                f"Revisar cantidades de ingredientes."
+                "El plan debe estar dentro de ±20% del DER. "
+                "Ajustar cantidades_g de ingredientes para cumplir el requerimiento energético."
             )
         elif desviacion > 0.10:
             warnings.append(
-                f"Leve desviación calórica: {kcal_suma:.0f} kcal vs DER {der_kcal:.0f} kcal "
-                f"({desviacion:.1%}). Aceptable pero revisar."
+                f"Desviación calórica: {kcal_suma:.0f} kcal vs DER {der_kcal:.0f} kcal "
+                f"({desviacion:.1%}). El plan debe idealmente estar en ±10%."
             )
 
     # ── 2. Proteína mínima NRC ────────────────────────────────────────────────
@@ -124,11 +127,17 @@ def validate_nutritional_plan(
                     "Los gatos son carnívoros obligados — no se puede reducir más."
                 )
         else:
+            # Perros: mínimo NRC 18% MS adulto, 22% MS cachorro (<12m).
+            # Es bloqueante igual que gatos — un plan con déficit proteico crea riesgo de
+            # sarcopenia, fallo renal (paradoja: la restricción renal aplica a proteína ALTA,
+            # pero el mínimo NRC sigue vigente para mantener masa muscular).
             min_protein = 22.0 if is_kitten_puppy else 18.0
             if proteina_pct < min_protein:
-                warnings.append(
-                    f"PROTEÍNA BAJA para perro: {proteina_pct:.1f}% MS "
-                    f"(mínimo NRC: {min_protein}% MS). Verificar si hay condición médica que justifique."
+                blocking_errors.append(
+                    f"PROTEÍNA INSUFICIENTE para perro: {proteina_pct:.1f}% MS "
+                    f"(mínimo NRC: {min_protein}% MS). "
+                    "Riesgo de sarcopenia y déficit nutricional. "
+                    "Aumentar fuente proteica dentro de las restricciones de la condición médica."
                 )
 
     # ── 3. Ratio Calcio:Fósforo ───────────────────────────────────────────────
@@ -136,15 +145,13 @@ def validate_nutritional_plan(
     fosforo_g = _get_float(perfil, "fosforo_g_dia")
     if calcio_g > 0 and fosforo_g > 0:
         ratio_ca_p = calcio_g / fosforo_g
-        if ratio_ca_p < 0.8 or ratio_ca_p > 2.5:
+        # Blocker en los límites exactos NRC 2006 (1.0–2.0).
+        # Fuera de rango causa problemas esqueléticos en crecimiento y alteraciones metabólicas.
+        if ratio_ca_p < 1.0 or ratio_ca_p > 2.0:
             blocking_errors.append(
-                f"RATIO Ca:P CRÍTICO: {ratio_ca_p:.2f} (debe estar entre 1.0 y 2.0). "
+                f"RATIO Ca:P FUERA DE RANGO NRC: {ratio_ca_p:.2f} (rango obligatorio 1.0–2.0). "
                 f"Ca: {calcio_g:.2f}g · P: {fosforo_g:.2f}g/día. "
-                "Fuera de rango causa problemas esqueléticos y metabólicos."
-            )
-        elif ratio_ca_p < 1.0 or ratio_ca_p > 2.0:
-            warnings.append(
-                f"Ratio Ca:P subóptimo: {ratio_ca_p:.2f} (rango ideal 1.0-2.0). Revisar suplementación."
+                "Ajustar suplementación de calcio o reducir fuentes altas en fósforo."
             )
 
     # ── 4. Restricciones médicas violadas ────────────────────────────────────

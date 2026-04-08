@@ -15,6 +15,7 @@ Constitution REGLA 8: disclaimer en todas las páginas del PDF.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import uuid
 from dataclasses import dataclass
@@ -114,20 +115,25 @@ class ExportPlanUseCase:
         content_hash = self.compute_content_hash(plan_data)
         r2_key = f"{_PDF_KEY_PREFIX}/{plan_id}/{content_hash}.pdf"
 
-        # 5. Cache check
-        if self._storage_client.exists(r2_key):
-            url = self._storage_client.generate_presigned_url(r2_key, expires_in=_PRESIGNED_TTL)
+        # 5. Cache check — sync boto3 en thread para no bloquear el event loop
+        exists = await asyncio.to_thread(self._storage_client.exists, r2_key)
+        if exists:
+            url = await asyncio.to_thread(
+                self._storage_client.generate_presigned_url, r2_key, _PRESIGNED_TTL
+            )
             expires_at = datetime.now(timezone.utc) + timedelta(seconds=_PRESIGNED_TTL)
             return ExportResult(url=url, expires_at=expires_at)
 
-        # 6. Generar PDF
-        pdf_bytes = self._pdf_generator.generate(plan_data)
+        # 6. Generar PDF — WeasyPrint es CPU-intensivo y síncrono; corre en thread
+        pdf_bytes = await asyncio.to_thread(self._pdf_generator.generate, plan_data)
 
-        # 7. Subir a R2
-        self._storage_client.upload(r2_key, pdf_bytes, "application/pdf")
+        # 7. Subir a R2 — sync boto3 en thread
+        await asyncio.to_thread(self._storage_client.upload, r2_key, pdf_bytes, "application/pdf")
 
         # 8. Generar URL pre-signed
-        url = self._storage_client.generate_presigned_url(r2_key, expires_in=_PRESIGNED_TTL)
+        url = await asyncio.to_thread(
+            self._storage_client.generate_presigned_url, r2_key, _PRESIGNED_TTL
+        )
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=_PRESIGNED_TTL)
 
         return ExportResult(url=url, expires_at=expires_at)

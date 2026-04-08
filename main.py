@@ -18,6 +18,11 @@ load_dotenv(override=False) or load_dotenv(".env.dev", override=False)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.infrastructure.logging_config import configure_logging
+
+configure_logging()
+
+from backend.presentation.middleware.correlation_middleware import CorrelationMiddleware
 from backend.presentation.routers.auth_router import router as auth_router
 from backend.presentation.routers.pet_router import router as pet_router
 from backend.presentation.routers.plan_router import router as plan_router
@@ -64,8 +69,11 @@ app.add_middleware(
     allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID", "X-Trace-ID"],
 )
+# CorrelationMiddleware se agrega después de CORS para ejecutarse PRIMERO (orden inverso en Starlette).
+# Asegura que trace_id esté disponible para todos los logs del request.
+app.add_middleware(CorrelationMiddleware)
 
 app.include_router(auth_router)
 app.include_router(pet_router)

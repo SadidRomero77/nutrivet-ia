@@ -45,6 +45,7 @@ from backend.infrastructure.agent.subgraphs.plan_generation import (
 )
 from backend.infrastructure.agent.subgraphs.scanner import run_scanner_subgraph
 from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTraceRepository
+from backend.infrastructure.db.label_scan_repository import PostgreSQLLabelScanRepository
 from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
 from backend.infrastructure.db.plan_repository import PostgreSQLPlanRepository
 from backend.infrastructure.db.session import get_db_session
@@ -110,10 +111,12 @@ def _build_consultation_fn(session):
     return _consultation
 
 
-def _build_scanner_fn(_session):
-    """Construye scanner subgraph (sin repositorios adicionales — lee de state)."""
+def _build_scanner_fn(session):
+    """Construye scanner subgraph con LabelScanRepository inyectado."""
+    label_scan_repo = PostgreSQLLabelScanRepository(session)
+
     async def _scanner(state: NutriVetState) -> NutriVetState:
-        return await run_scanner_subgraph(state)
+        return await run_scanner_subgraph(state, label_scan_repo=label_scan_repo)
 
     return _scanner
 
@@ -414,3 +417,51 @@ async def get_conversation_history(
 
     conversation_repo = PostgreSQLConversationRepository(session)
     return await conversation_repo.list_for_display(pet_id=pet_id, limit=limit)
+
+
+@router.get(
+    "/v1/agent/quota",
+    status_code=status.HTTP_200_OK,
+    summary="Cuota del agente conversacional del usuario actual",
+)
+async def get_agent_quota(
+    current_user=Depends(get_current_user),
+    session=Depends(get_db_session),
+) -> dict[str, Any]:
+    """
+    Retorna el estado actual de la cuota del agente conversacional.
+
+    Free tier: daily_limit=3, total_limit=9. Tiers pagados: sin límite (null).
+    Usado por el cliente Flutter para mostrar el contador "2/3 hoy".
+    """
+    from backend.infrastructure.agent.nodes.freemium_gate import (
+        DAILY_LIMIT, TOTAL_LIMIT, FREE_TIER,
+    )
+
+    quota_repo = PostgreSQLAgentQuotaRepository(session)
+    tier_upper = current_user.tier.value.upper()
+    is_free = tier_upper == FREE_TIER
+
+    if is_free:
+        quota = await quota_repo.get_or_create(str(current_user.user_id))
+        daily_count = quota.daily_count
+        total_count = quota.total_count
+        can_ask = daily_count < DAILY_LIMIT and total_count < TOTAL_LIMIT
+        return {
+            "is_free_tier": True,
+            "daily_count": daily_count,
+            "daily_limit": DAILY_LIMIT,
+            "total_count": total_count,
+            "total_limit": TOTAL_LIMIT,
+            "can_ask": can_ask,
+        }
+
+    # Tiers pagados: cuota ilimitada
+    return {
+        "is_free_tier": False,
+        "daily_count": None,
+        "daily_limit": None,
+        "total_count": None,
+        "total_limit": None,
+        "can_ask": True,
+    }

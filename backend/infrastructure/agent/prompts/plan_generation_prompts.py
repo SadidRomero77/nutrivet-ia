@@ -373,8 +373,9 @@ REGLAS ANTI-ALUCINACIÓN — NUNCA VIOLES ESTAS REGLAS:
 
 2. NUNCA recalcules RER o DER — usa los valores provistos sin modificar
 
-3. NUNCA uses ingredientes que no están en la lista LATAM — NO uses quinoa, acai, spirulina,
+3. NUNCA uses ingredientes que no están disponibles en LATAM — NO uses acai, spirulina,
    goji berry, MCT oil puro, proteínas exóticas no disponibles, ni ingredientes anglosajones
+   (quinoa SÍ está disponible en LATAM — es nativa de los Andes — puedes usarla si aplica)
 
 4. NUNCA suggieras medicamentos, antibióticos, o tratamientos médicos — solo nutrición
 
@@ -419,7 +420,7 @@ def _build_condition_block(protocols: list[ConditionProtocol], species: str) -> 
     magnesio_restricted = any(p.magnesio_restringido for p in protocols)
     cobre_restricted = any(p.cobre_restringido for p in protocols)
 
-    lines.append(f"METAS NUTRICIONALES COMBINADAS (todos los protocolos aplicados simultáneamente):")
+    lines.append("METAS NUTRICIONALES COMBINADAS (todos los protocolos aplicados simultáneamente):")
     lines.append(f"  - Proteína: {protein_min:.0f}%–{protein_max:.0f}% MS")
     lines.append(f"  - Grasa MÁXIMA: {fat_max:.0f}% MS (el más restrictivo de todas las condiciones)")
     if phosphorus_restricted:
@@ -621,6 +622,7 @@ def build_plan_user_prompt(
     rer_kcal: float,
     der_kcal: float,
     medical_restrictions: list[str],
+    toxic_allergies: list[str] | None = None,
 ) -> str:
     """
     Construye el user prompt con todos los datos de la mascota (sin PII).
@@ -647,11 +649,21 @@ def build_plan_user_prompt(
         conditions_text = "Sin condiciones médicas registradas"
         hitl_note = "→ Mascota sana — plan irá directamente a ACTIVE"
 
-    # Alergias
+    # Alergias — incluyendo alerta especial si alguna coincide con tóxicos
     if allergies:
         allergies_text = f"ALERGIAS/INTOLERANCIAS: {', '.join(allergies)} — EXCLUIR ABSOLUTAMENTE"
     else:
         allergies_text = "Sin alergias registradas"
+
+    # Alergias tóxicas detectadas (Nodo 4 — Constitution REGLA 1)
+    if toxic_allergies is None:
+        toxic_allergies = []
+    if toxic_allergies:
+        allergies_text += (
+            f"\n⚠ ALERTA PRE-VALIDADA: Las siguientes alergias registradas también son TÓXICAS "
+            f"para {species}: {', '.join(toxic_allergies)}. "
+            "ESTAS NO DEBEN APARECER EN EL PLAN BAJO NINGUNA CIRCUNSTANCIA."
+        )
 
     # Restricciones médicas hard-coded
     if medical_restrictions:

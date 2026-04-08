@@ -18,9 +18,33 @@ Constitution REGLAS activas: 1 (toxicidad), 2 (restricciones), 3 (RER/DER), 4 (H
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Errores de validación de dominio → no reintentar (son deterministas)
+_PERMANENT_ERROR_MARKERS = (
+    "tóxicos detectados",
+    "restricción",
+    "validación nutricional",
+    "no encontrada",
+)
+
+# Backoff para reintentos de errores transitorios (LLM timeout, red)
+_RETRY_DELAYS = [5.0, 15.0]  # segundos — intento 1: 5s, intento 2: 15s
+_MAX_RETRIES = len(_RETRY_DELAYS)
+
+
+def _is_permanent_error(exc: Exception) -> bool:
+    """Retorna True si el error es determinista y no tiene sentido reintentar."""
+    if isinstance(exc, ValueError):
+        msg = str(exc).lower()
+        return any(marker in msg for marker in _PERMANENT_ERROR_MARKERS)
+    return False
 
 from backend.application.llm.llm_router import LLMRouter
 from backend.application.interfaces.agent_trace_repository import IAgentTraceRepository
@@ -32,19 +56,40 @@ from backend.domain.aggregates.nutrition_plan import (
 )
 from backend.domain.aggregates.user_account import UserTier
 from backend.domain.nutrition.nrc_calculator import NRCCalculator
-from backend.domain.safety.food_safety_checker import FoodSafetyChecker
 from backend.domain.safety.medical_restriction_engine import MedicalRestrictionEngine
 from backend.domain.value_objects.bcs import BCS, BCSPhase
 from backend.infrastructure.agent.prompts.plan_generation_prompts import (
     build_plan_system_prompt,
     build_plan_user_prompt,
 )
-from backend.infrastructure.agent.validators.json_repair import safe_parse_plan_json
-from backend.infrastructure.agent.validators.nutritional_validator import (
-    enrich_plan_with_validation,
-    validate_nutritional_plan,
+from backend.infrastructure.agent.subgraphs._plan_generation_core import (
+    build_substitute_set,
+    requires_vet_review,
+    validate_and_enrich_plan,
 )
 from backend.infrastructure.llm.openrouter_client import OpenRouterClient
+
+
+async def _update_progress(job_id: uuid.UUID, step: int, message: str) -> None:
+    """
+    Actualiza el progreso del job en DB con su propia sesión y commit inmediato.
+
+    Se usa durante la generación para que el endpoint de polling refleje el paso
+    actual en tiempo real. El fallo de esta operación es silencioso — nunca debe
+    bloquear la generación del plan.
+    """
+    from backend.infrastructure.db.session import AsyncSessionLocal
+    try:
+        async with AsyncSessionLocal() as session:
+            from backend.infrastructure.db.plan_job_repository import PostgreSQLPlanJobRepository
+            repo = PostgreSQLPlanJobRepository(session)
+            job = await repo.find_by_id(job_id)
+            if job is not None:
+                job.update_progress(step=step, message=message)
+                await repo.update(job)
+                await session.commit()
+    except Exception:
+        pass  # El progreso es best-effort — no interrumpir la generación
 
 
 class PlanGenerationWorker:
@@ -74,8 +119,9 @@ class PlanGenerationWorker:
         Ejecuta los 11 pasos de generación de plan para el job dado.
 
         Actualiza el job a PROCESSING al inicio y a READY/FAILED al final.
+        Reintenta hasta _MAX_RETRIES veces ante errores transitorios (LLM, red).
+        Errores de dominio (tóxicos, restricciones, mascota no encontrada) fallan inmediatamente.
         """
-        # --- Paso 1: Cargar job ---
         job = await self._job_repo.find_by_id(job_id)
         if job is None:
             return
@@ -83,23 +129,43 @@ class PlanGenerationWorker:
         job.mark_processing()
         await self._job_repo.update(job)
 
-        try:
-            plan_id = await self._generate(job=job, user_tier=user_tier)
-            job.mark_ready(plan_id=plan_id)
-        except Exception as e:
-            job.mark_failed(error_message=str(e))
+        last_error: Exception | None = None
+        for attempt in range(1 + _MAX_RETRIES):
+            try:
+                plan_id = await self._generate(job=job, user_tier=user_tier)
+                job.mark_ready(plan_id=plan_id)
+                await self._job_repo.update(job)
+                return
+            except Exception as exc:
+                last_error = exc
+                if _is_permanent_error(exc):
+                    logger.warning(
+                        "job=%s error permanente (intento %d) — no reintentar: %s",
+                        job_id, attempt + 1, exc,
+                    )
+                    break
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_DELAYS[attempt]
+                    logger.warning(
+                        "job=%s error transitorio (intento %d/%d) — reintentando en %.0fs: %s",
+                        job_id, attempt + 1, 1 + _MAX_RETRIES, delay, type(exc).__name__,
+                    )
+                    await asyncio.sleep(delay)
 
+        job.mark_failed(error_message=str(last_error))
         await self._job_repo.update(job)
 
     async def _generate(self, job: Any, user_tier: UserTier) -> uuid.UUID:
         """Pasos 1-10 de generación. Retorna el plan_id creado."""
 
         # --- Paso 1: Cargar PetProfile ---
+        await _update_progress(job.job_id, 1, "Cargando perfil de la mascota...")
         pet = await self._pet_repo.find_by_id(job.pet_id)
         if pet is None:
             raise ValueError(f"Mascota '{job.pet_id}' no encontrada.")
 
         # --- Paso 2: Calcular RER/DER (determinista — REGLA 3) ---
+        await _update_progress(job.job_id, 2, "Calculando requerimientos calóricos (NRC)...")
         rer = NRCCalculator.calculate_rer(pet.weight_kg)
         der = NRCCalculator.calculate_der(
             rer=rer,
@@ -112,16 +178,26 @@ class PlanGenerationWorker:
         bcs_phase: BCSPhase = BCS(pet.bcs.value).phase
 
         # --- Paso 3: Obtener restricciones médicas (hard-coded — REGLA 2) ---
+        await _update_progress(job.job_id, 3, "Verificando restricciones médicas...")
         conditions = [c.value for c in pet.medical_conditions]
         restriction_result = MedicalRestrictionEngine.get_restrictions_for_conditions(
             conditions
         )
         forbidden_ingredients = list(restriction_result.prohibited)
 
-        # --- Paso 4: Validar alergias ---
+        # --- Paso 4: Validar alergias (incluye detección de alergias tóxicas — REGLA 1) ---
+        await _update_progress(job.job_id, 4, "Validando alergias e intolerancias...")
         allergy_list = list(pet.allergies) if pet.allergies else []
 
+        # Detectar alergias que coinciden con TOXIC_DOGS/TOXIC_CATS (refuerzo pre-LLM)
+        from backend.domain.safety.food_safety_checker import FoodSafetyChecker
+        toxic_allergies: list[str] = [
+            a for a in allergy_list
+            if FoodSafetyChecker.check_ingredient(ingredient=a, species=pet.species.value).is_toxic
+        ]
+
         # --- Paso 5: Seleccionar modelo LLM (determinista — REGLA 5) ---
+        await _update_progress(job.job_id, 5, "Seleccionando modelo de IA...")
         model = LLMRouter.select_model(
             tier=user_tier,
             conditions_count=len(conditions),
@@ -146,46 +222,26 @@ class PlanGenerationWorker:
             bcs_phase=bcs_phase.value,
             conditions=conditions,
             allergies=allergy_list,
+            toxic_allergies=toxic_allergies,
             current_diet=pet.current_diet.value if hasattr(pet.current_diet, "value") else str(getattr(pet, "current_diet", "concentrado")),
             modality=job.modality,
             rer_kcal=rer,
             der_kcal=der,
             medical_restrictions=forbidden_ingredients,
         )
+        await _update_progress(job.job_id, 6, "Generando plan nutricional con IA...")
+        # max_tokens=8192: planes complejos (5+ condiciones, 10 secciones) pueden superar 4096 tokens
         llm_response = await self._llm_client.generate(
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
+            max_tokens=8192,
         )
 
         # --- Paso 7: Validación en 3 capas (REGLA 1 + coherencia NRC) ---
-
-        # Capa 1: JSON repair + parsing robusto
-        plan_content = safe_parse_plan_json(llm_response.content, der_kcal=der)
-
-        # Capa 2: FoodSafetyChecker — toxicidad (REGLA 1)
-        ingredients_raw: list[str] = []
-        ing = plan_content.get("ingredientes", [])
-        if isinstance(ing, list):
-            ingredients_raw = [
-                i["nombre"] if isinstance(i, dict) else str(i) for i in ing
-            ]
-        elif isinstance(ing, dict):
-            ingredients_raw = list(ing.keys())
-
-        toxicity_results = FoodSafetyChecker.validate_plan_ingredients(
-            ingredients=ingredients_raw,
-            species=pet.species.value,
-        )
-        toxic_found = [r.ingredient for r in toxicity_results if r.is_toxic]
-        if toxic_found:
-            raise ValueError(
-                f"Plan rechazado: ingredientes tóxicos detectados: {toxic_found}"
-            )
-
-        # Capa 3: validación nutricional NRC (proteína, Ca:P, grasa, restricciones)
-        validation_result = validate_nutritional_plan(
-            plan_content=plan_content,
+        await _update_progress(job.job_id, 7, "Verificando seguridad alimentaria...")
+        plan_content, ingredients_raw = validate_and_enrich_plan(
+            raw_llm_response=llm_response.content,
             species=pet.species.value,
             conditions=conditions,
             der_kcal=der,
@@ -194,25 +250,22 @@ class PlanGenerationWorker:
             medical_restrictions=forbidden_ingredients,
             age_months=pet.age_months,
         )
-        if validation_result.blocking_errors:
-            raise ValueError(
-                "Plan rechazado por validación nutricional: "
-                + " | ".join(validation_result.blocking_errors)
-            )
-        plan_content = enrich_plan_with_validation(plan_content, validation_result)
 
         # --- Paso 8: Generar substitute_set ---
-        substitute_set = [
-            ing_name for ing_name in ingredients_raw
-            if ing_name.lower() not in [f.lower() for f in forbidden_ingredients]
-        ]
+        await _update_progress(job.job_id, 8, "Generando sustitutos de ingredientes...")
+        substitute_set = build_substitute_set(
+            ingredients_raw=ingredients_raw,
+            forbidden_ingredients=forbidden_ingredients,
+        )
 
         # --- Paso 9: Determinar HITL (REGLA 4) ---
-        has_medical_conditions = len(conditions) > 0
-        plan_status = PlanStatus.PENDING_VET if has_medical_conditions else PlanStatus.ACTIVE
-        plan_type = PlanType.TEMPORAL_MEDICAL if has_medical_conditions else PlanType.ESTANDAR
+        await _update_progress(job.job_id, 9, "Determinando revisión veterinaria...")
+        needs_review = requires_vet_review(conditions)
+        plan_status = PlanStatus.PENDING_VET if needs_review else PlanStatus.ACTIVE
+        plan_type = PlanType.TEMPORAL_MEDICAL if needs_review else PlanType.ESTANDAR
 
         # --- Paso 10: Persistir agent_trace (inmutable — REGLA 6) ---
+        await _update_progress(job.job_id, 10, "Guardando plan en base de datos...")
         # plan_id se genera aquí para pasarlo al trace.
         # agent_traces son append-only sin UPDATE, por lo que plan_id debe
         # conocerse ANTES de insertar el trace.
@@ -235,7 +288,6 @@ class PlanGenerationWorker:
                 "rer_kcal": round(rer, 2),
                 "der_kcal": round(der, 2),
                 "ingredients_count": len(ingredients_raw),
-                "toxic_found": toxic_found,
             },
             created_at=datetime.now(timezone.utc),
         )

@@ -10,9 +10,7 @@ Constitution REGLAs activas: 1 (toxicidad), 2 (restricciones), 3 (RER/DER),
 """
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from typing import Any
 
 from backend.application.interfaces.agent_trace_repository import IAgentTraceRepository
 from backend.application.interfaces.plan_repository import IPlanRepository
@@ -30,10 +28,11 @@ from backend.infrastructure.agent.prompts.plan_generation_prompts import (
     build_plan_user_prompt,
 )
 from backend.infrastructure.agent.state import NutriVetState
-from backend.infrastructure.agent.validators.json_repair import safe_parse_plan_json
-from backend.infrastructure.agent.validators.nutritional_validator import (
-    enrich_plan_with_validation,
-    validate_nutritional_plan,
+from backend.infrastructure.agent.subgraphs._plan_generation_core import (
+    build_substitute_set,
+    extract_ingredient_names,
+    requires_vet_review,
+    validate_and_enrich_plan,
 )
 from backend.infrastructure.llm.openrouter_client import OpenRouterClient
 
@@ -91,7 +90,8 @@ def nodo_3_apply_restrictions(state: NutriVetState) -> NutriVetState:
 def nodo_4_check_safety_pre(state: NutriVetState) -> NutriVetState:
     """
     Valida alergias registradas contra la base de toxicidad (pre-LLM).
-    Si hay alergia tóxica → registra en state para que el prompt lo incluya.
+    Si hay alergia tóxica → persiste en state para que el prompt la resalte
+    con advertencia explícita adicional al LLM (REGLA 1 — refuerzo pre-LLM).
     No hace llamadas externas.
     """
     pet = state["pet_profile"]
@@ -104,7 +104,7 @@ def nodo_4_check_safety_pre(state: NutriVetState) -> NutriVetState:
         if check.is_toxic:
             toxic_allergies.append(allergy)
 
-    return {**state, "allergy_list": allergies}
+    return {**state, "allergy_list": allergies, "toxic_allergies_detected": toxic_allergies}
 
 
 # ─── Nodo 5: select_llm ───────────────────────────────────────────────────────
@@ -164,6 +164,7 @@ async def nodo_6_generate_with_llm(
         bcs_phase=state["bcs_phase"],
         conditions=conditions,
         allergies=state.get("allergy_list", []),
+        toxic_allergies=state.get("toxic_allergies_detected", []),
         current_diet=pet.get("current_diet", "concentrado"),
         modality=modality,
         rer_kcal=state["rer_kcal"],
@@ -171,10 +172,13 @@ async def nodo_6_generate_with_llm(
         medical_restrictions=state.get("medical_restrictions", []),
     )
 
+    # max_tokens=8192: planes con 5+ condiciones + 10 secciones pueden superar 4096 tokens
+    # (H6 — auditoría pre-deploy)
     response = await client.generate(
         model=state["llm_model"],
         system_prompt=system_prompt,
         user_prompt=user_prompt,
+        max_tokens=8192,
     )
 
     traces = list(state.get("agent_traces", []))
@@ -193,63 +197,24 @@ async def nodo_6_generate_with_llm(
 
 def nodo_7_validate_output(state: NutriVetState) -> NutriVetState:
     """
-    Valida el output del LLM en 3 capas (REGLA 1 — post-LLM):
-    1. JSON repair + parsing robusto (extrae JSON aunque venga con markdown)
-    2. FoodSafetyChecker — bloquea si hay ingredientes tóxicos
-    3. NutritionalValidator — verifica coherencia calórica, proteína mínima, Ca:P ratio,
-       restricciones médicas, fósforo en ERC, grasa en pancreatitis, taurina en gatos
+    Valida el output del LLM en 3 capas (REGLA 1 — post-LLM).
 
-    Blocking errors → ValueError (job FAILED).
-    Warnings → se añaden a notas_clinicas del plan.
+    Delega a validate_and_enrich_plan() del módulo compartido:
+    1. JSON repair + parsing robusto.
+    2. FoodSafetyChecker — bloquea ingredientes tóxicos (tolerancia CERO).
+    3. NutritionalValidator — coherencia calórica, proteína, Ca:P, restricciones.
     """
-    raw = state.get("llm_response_content", "")
     pet = state["pet_profile"]
-    species = pet.get("species", "perro")
-    conditions = pet.get("medical_conditions", [])
-    allergies = state.get("allergy_list", [])
-    medical_restrictions = state.get("medical_restrictions", [])
-
-    # Capa 1: parseo robusto con JSON repair
-    plan_content: dict[str, Any] = safe_parse_plan_json(raw, der_kcal=state["der_kcal"])
-
-    # Capa 2: toxicidad con FoodSafetyChecker (REGLA 1)
-    ingredients_raw: list[str] = []
-    ing = plan_content.get("ingredientes")
-    if isinstance(ing, list):
-        ingredients_raw = [i["nombre"] if isinstance(i, dict) else str(i) for i in ing]
-    elif isinstance(ing, dict):
-        ingredients_raw = list(ing.keys())
-
-    toxicity_results = FoodSafetyChecker.validate_plan_ingredients(
-        ingredients=ingredients_raw, species=species
-    )
-    toxic_found = [r.ingredient for r in toxicity_results if r.is_toxic]
-    if toxic_found:
-        raise ValueError(
-            f"Plan rechazado: ingredientes tóxicos detectados: {toxic_found}"
-        )
-
-    # Capa 3: validación nutricional completa (NRC + coherencia calórica + condiciones)
-    validation_result = validate_nutritional_plan(
-        plan_content=plan_content,
-        species=species,
-        conditions=conditions,
+    plan_content, _ = validate_and_enrich_plan(
+        raw_llm_response=state.get("llm_response_content", ""),
+        species=pet.get("species", "perro"),
+        conditions=pet.get("medical_conditions", []),
         der_kcal=state["der_kcal"],
         rer_kcal=state["rer_kcal"],
-        allergies=allergies,
-        medical_restrictions=medical_restrictions,
+        allergies=state.get("allergy_list", []),
+        medical_restrictions=state.get("medical_restrictions", []),
         age_months=pet.get("age_months", 12),
     )
-
-    if validation_result.blocking_errors:
-        raise ValueError(
-            f"Plan rechazado por validación nutricional: "
-            + " | ".join(validation_result.blocking_errors)
-        )
-
-    # Enriquecer plan con warnings como notas_clinicas
-    plan_content = enrich_plan_with_validation(plan_content, validation_result)
-
     return {**state, "plan_content": plan_content}
 
 
@@ -258,21 +223,12 @@ def nodo_7_validate_output(state: NutriVetState) -> NutriVetState:
 def nodo_8_generate_substitutes(state: NutriVetState) -> NutriVetState:
     """Genera el substitute_set: ingredientes aprobados para sustitución sin HITL."""
     plan_content = dict(state.get("plan_content") or {})
-    forbidden = [f.lower() for f in state.get("medical_restrictions", [])]
-
-    ingredients_raw: list[str] = []
-    ing = plan_content.get("ingredientes")
-    if isinstance(ing, list):
-        ingredients_raw = [i["nombre"] if isinstance(i, dict) else str(i) for i in ing]
-    elif isinstance(ing, dict):
-        ingredients_raw = list(ing.keys())
-
-    substitute_set = [
-        ing_name for ing_name in ingredients_raw
-        if ing_name.lower() not in forbidden
-    ]
+    ingredients_raw = extract_ingredient_names(plan_content)
+    substitute_set = build_substitute_set(
+        ingredients_raw=ingredients_raw,
+        forbidden_ingredients=state.get("medical_restrictions", []),
+    )
     plan_content["substitute_set"] = substitute_set
-
     return {**state, "plan_content": plan_content}
 
 
@@ -285,8 +241,7 @@ def nodo_9_determine_hitl(state: NutriVetState) -> NutriVetState:
     Mascotas sanas → ACTIVE directo.
     """
     pet = state["pet_profile"]
-    has_conditions = len(pet.get("medical_conditions", [])) > 0
-    return {**state, "requires_vet_review": has_conditions}
+    return {**state, "requires_vet_review": requires_vet_review(pet.get("medical_conditions", []))}
 
 
 # ─── Nodo 10: persist_and_notify ──────────────────────────────────────────────

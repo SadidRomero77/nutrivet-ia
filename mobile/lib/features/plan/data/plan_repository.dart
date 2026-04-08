@@ -423,6 +423,8 @@ class PlanJob {
     required this.status,
     this.planId,
     this.errorMessage,
+    this.progressStep = 0,
+    this.progressMessage = '',
   });
 
   factory PlanJob.fromJson(Map<String, dynamic> json) => PlanJob(
@@ -430,12 +432,20 @@ class PlanJob {
         status: json['status'] as String,
         planId: json['plan_id'] as String?,
         errorMessage: json['error_message'] as String?,
+        progressStep: (json['progress_step'] as int?) ?? 0,
+        progressMessage: (json['progress_message'] as String?) ?? '',
       );
 
   final String jobId;
   final String status; // QUEUED | PROCESSING | READY | FAILED
   final String? planId;
   final String? errorMessage;
+
+  /// Paso actual del worker (0-10). Actualizado en tiempo real durante PROCESSING.
+  final int progressStep;
+
+  /// Descripción legible del paso actual para mostrar al usuario.
+  final String progressMessage;
 
   bool get isReady => status == 'READY';
   bool get isFailed => status == 'FAILED';

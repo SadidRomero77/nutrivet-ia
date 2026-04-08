@@ -140,5 +140,7 @@ class PlanGenerationUseCase:
             "status": job.status.value if isinstance(job.status, PlanJobStatus) else job.status,
             "plan_id": job.plan_id,
             "error_message": job.error_message,
+            "progress_step": job.progress_step,
+            "progress_message": job.progress_message,
         }
         return result

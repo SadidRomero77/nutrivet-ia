@@ -11,7 +11,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart' show Uuid;
 
 import '../../pet/data/pet_repository.dart';
 import '../data/agent_repository.dart';
@@ -33,17 +32,27 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  final _conversationId = const Uuid().v4();
   final List<_ChatMessage> _messages = [];
   bool _sending = false;
   bool _loadingHistory = true;
   PetModel? _pet;
+  AgentQuota _quota = AgentQuota.unlimited();
 
   @override
   void initState() {
     super.initState();
     _loadHistory();
     _loadPet();
+    _loadQuota();
+  }
+
+  Future<void> _loadQuota() async {
+    try {
+      final quota = await ref.read(agentRepositoryProvider).getQuota();
+      if (mounted) setState(() => _quota = quota);
+    } catch (_) {
+      // Cuota no disponible — el chat funciona sin badge
+    }
   }
 
   Future<void> _loadPet() async {
@@ -103,7 +112,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final stream = ref.read(agentRepositoryProvider).sendMessage(
             petId: widget.petId,
             message: text,
-            conversationId: _conversationId,
           );
 
       await for (final chunk in stream) {
@@ -125,6 +133,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       });
     } finally {
       if (mounted) setState(() => _sending = false);
+      // Actualizar cuota después de cada mensaje (solo visible en Free tier)
+      if (_quota.isFreeTier) _loadQuota();
     }
   }
 
@@ -148,6 +158,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(petName != null ? 'Chat · $petName' : 'Agente NutriVet'),
+        actions: [
+          if (_quota.badgeText != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: _QuotaBadge(quota: _quota),
+            ),
+        ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(28),
           child: Padding(
@@ -453,6 +470,45 @@ class _InputBar extends StatelessWidget {
                   : const Icon(Icons.send),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Badge de cuota diaria visible solo para el tier Free.
+/// Muestra "2/3 hoy" y cambia a rojo cuando se agota.
+class _QuotaBadge extends StatelessWidget {
+  const _QuotaBadge({required this.quota});
+
+  final AgentQuota quota;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = quota.badgeText;
+    if (text == null) return const SizedBox.shrink();
+
+    final exhausted = !quota.canAsk;
+    final color = exhausted ? Colors.red.shade300 : Colors.amber.shade300;
+
+    return Tooltip(
+      message: exhausted
+          ? 'Límite diario alcanzado. Actualiza para acceso ilimitado.'
+          : 'Preguntas restantes hoy (plan Free)',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: 1),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
         ),
       ),
     );

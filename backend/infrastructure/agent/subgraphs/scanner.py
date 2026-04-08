@@ -13,12 +13,14 @@ ADR-019: gpt-4o siempre para OCR.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.application.interfaces.label_scan_repository import ILabelScanRepository
 from backend.infrastructure.agent.nodes.image_validator import (
     IMAGE_TYPE_REJECTED,
     classify_image_type,
@@ -75,37 +77,24 @@ async def _upload_to_r2(
     scan_id: str,
 ) -> str:
     """
-    Sube imagen a Cloudflare R2.
+    Sube imagen a Cloudflare R2 y retorna URL pre-signed (TTL 1h).
 
-    En producción usa boto3 con R2 credentials.
-    Retorna la URL pública del objeto.
+    Usa R2StorageClient con las credenciales estándar del proyecto
+    (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME).
+    En dev sin R2 configurado → retorna URL placeholder para que el pipeline continúe.
     """
-    # Implementación real requiere R2_BUCKET, R2_ACCESS_KEY, R2_SECRET_KEY env vars
-    # Para tests, esta función se mockea completamente.
+    from backend.infrastructure.storage.r2_client import R2StorageClient
+
+    ext = mime_type.split("/")[-1]
+    object_key = f"scans/{scan_id}.{ext}"
+
     try:
-        import os
-        import boto3
-        from botocore.config import Config
-
-        bucket = os.environ["R2_BUCKET"]
-        endpoint = os.environ["R2_ENDPOINT_URL"]
-        key_prefix = "scans"
-
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=endpoint,
-            aws_access_key_id=os.environ["R2_ACCESS_KEY"],
-            aws_secret_access_key=os.environ["R2_SECRET_KEY"],
-            config=Config(signature_version="s3v4"),
-        )
-
-        ext = mime_type.split("/")[-1]
-        object_key = f"{key_prefix}/{scan_id}.{ext}"
-        s3.put_object(Bucket=bucket, Key=object_key, Body=image_bytes, ContentType=mime_type)
-
-        return f"{endpoint}/{bucket}/{object_key}"
+        storage = R2StorageClient.from_env()
+        # upload() y generate_presigned_url() son sync (boto3) — correr en thread
+        await asyncio.to_thread(storage.upload, object_key, image_bytes, mime_type)
+        return await asyncio.to_thread(storage.generate_presigned_url, object_key)
     except Exception:
-        # Sin R2 configurado → URL placeholder
+        # Sin R2 configurado (dev/test) → placeholder; el pipeline continúa
         return f"r2://scans/{scan_id}"
 
 
@@ -139,16 +128,38 @@ async def _persist_scan(
     ingredients: list[str],
     issues: list[str],
     recomendacion: str,
+    scan_id: uuid.UUID,
+    label_scan_repo: ILabelScanRepository | None,
 ) -> str:
     """
     Persiste el resultado del escaneo en label_scans.
 
-    En producción usa LabelScanRepository.
-    Retorna el scan_id generado.
+    Si label_scan_repo es None (tests sin DB), loggea y retorna scan_id sin persistir.
     """
-    # La implementación real usa PostgreSQLLabelScanRepository
-    # Para tests esta función se mockea.
-    return str(uuid.uuid4())
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    if label_scan_repo is None:
+        _logger.debug("label_scan_repo no disponible — skip persist scan %s", scan_id)
+        return str(scan_id)
+
+    try:
+        await label_scan_repo.save(
+            scan_id=scan_id,
+            pet_id=uuid.UUID(pet_id) if pet_id else uuid.uuid4(),
+            user_id=uuid.UUID(user_id) if user_id else uuid.uuid4(),
+            image_url=image_url,
+            image_type=image_type,
+            semaphore=semaphore,
+            ingredients=ingredients,
+            issues=issues,
+            recomendacion=recomendacion,
+            created_at=datetime.now(timezone.utc),
+        )
+    except Exception:
+        _logger.exception("Error al persistir scan %s — resultado retornado igual", scan_id)
+
+    return str(scan_id)
 
 
 # ── Pipeline principal ────────────────────────────────────────────────────────
@@ -156,6 +167,7 @@ async def _persist_scan(
 async def run_scanner_subgraph(
     state: NutriVetState,
     llm_client: OpenRouterClient | None = None,
+    label_scan_repo: ILabelScanRepository | None = None,
 ) -> NutriVetState:
     """
     Ejecuta el pipeline completo del scanner.
@@ -169,10 +181,35 @@ async def run_scanner_subgraph(
     image_bytes: bytes = state.get("scan_image_bytes", b"")
     mime_type: str = state.get("scan_mime_type", "image/jpeg")
     pet = state.get("pet_profile") or {}
-    scan_id = str(uuid.uuid4())
+    scan_uuid = uuid.uuid4()
+    scan_id = str(scan_uuid)
+
+    # ── Validación de tamaño de imagen (pre-clasificación) ────────────────────
+    _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+    if len(image_bytes) > _MAX_IMAGE_BYTES:
+        size_mb = len(image_bytes) / (1024 * 1024)
+        error_msg = (
+            f"❌ La imagen es demasiado grande ({size_mb:.1f} MB). "
+            "El tamaño máximo permitido es 10 MB. "
+            "Por favor, comprime la imagen antes de enviarla."
+        )
+        return {**state, "error": error_msg, "response": error_msg, "scan_semaphore": None}
+
+    if not image_bytes:
+        error_msg = "❌ No se recibió imagen. Por favor, selecciona una foto de la etiqueta nutricional."
+        return {**state, "error": error_msg, "response": error_msg, "scan_semaphore": None}
 
     # ── Nodo 1: Clasificar imagen (REGLA 7) ───────────────────────────────────
-    image_type = await _classify_image(image_bytes, mime_type, llm_client)
+    try:
+        image_type = await _classify_image(image_bytes, mime_type, llm_client)
+    except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).exception("Error al clasificar imagen — asumiendo rejected")
+        error_msg = (
+            "❌ No se pudo analizar la imagen en este momento. "
+            "Por favor, inténtalo de nuevo en unos segundos."
+        )
+        return {**state, "error": error_msg, "response": error_msg, "scan_semaphore": None}
 
     if image_type == IMAGE_TYPE_REJECTED:
         error_msg = (
@@ -228,6 +265,8 @@ async def run_scanner_subgraph(
         ingredients=ingredients,
         issues=semaphore_result.issues,
         recomendacion=semaphore_result.recomendacion,
+        scan_id=scan_uuid,
+        label_scan_repo=label_scan_repo,
     )
 
     response = (

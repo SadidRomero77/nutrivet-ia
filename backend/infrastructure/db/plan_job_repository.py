@@ -24,6 +24,8 @@ def _to_domain(row: PlanJobModel) -> PlanJob:
         status=PlanJobStatus(row.status),
         plan_id=row.plan_id,
         error_message=row.error_message,
+        progress_step=getattr(row, "progress_step", 0) or 0,
+        progress_message=getattr(row, "progress_message", "") or "",
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -69,4 +71,6 @@ class PostgreSQLPlanJobRepository(IPlanJobRepository):
         row.status = job.status.value
         row.plan_id = job.plan_id
         row.error_message = job.error_message
+        row.progress_step = job.progress_step
+        row.progress_message = job.progress_message
         await self._session.flush()
