@@ -4,6 +4,7 @@ PostgreSQLPlanRepository — Persistencia de NutritionPlan y SubstituteSet.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select
@@ -14,7 +15,8 @@ from backend.domain.aggregates.nutrition_plan import (
     NutritionPlan, PlanModality, PlanStatus, PlanType,
 )
 from backend.domain.value_objects.bcs import BCSPhase
-from backend.infrastructure.db.models import NutritionPlanModel
+from backend.infrastructure.db.models import NutritionPlanModel, PetModel
+from backend.infrastructure.encryption.fernet_encryptor import FernetEncryptor
 
 
 def _to_domain(row: NutritionPlanModel) -> NutritionPlan:
@@ -103,23 +105,70 @@ class PostgreSQLPlanRepository(IPlanRepository):
         row = result.scalar_one_or_none()
         return _to_domain(row) if row else None
 
-    async def list_by_owner(self, owner_id: uuid.UUID) -> list[NutritionPlan]:
-        """Lista todos los planes del owner."""
+    async def list_by_owner(
+        self,
+        owner_id: uuid.UUID,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[NutritionPlan]:
+        """Lista planes del owner, más reciente primero. Soporta paginación."""
         result = await self._session.execute(
             select(NutritionPlanModel).where(
                 NutritionPlanModel.owner_id == owner_id
             ).order_by(NutritionPlanModel.created_at.desc())
+            .limit(limit).offset(offset)
         )
         return [_to_domain(row) for row in result.scalars().all()]
 
-    async def list_pending_vet(self) -> list[NutritionPlan]:
-        """Lista todos los planes en PENDING_VET (dashboard vet)."""
+    async def list_pending_vet(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[NutritionPlan]:
+        """Lista planes en PENDING_VET ordenados por antigüedad. Soporta paginación."""
         result = await self._session.execute(
             select(NutritionPlanModel).where(
                 NutritionPlanModel.status == "PENDING_VET"
             ).order_by(NutritionPlanModel.created_at.asc())
+            .limit(limit).offset(offset)
         )
         return [_to_domain(row) for row in result.scalars().all()]
+
+    async def list_pending_vet_with_conditions(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[tuple[NutritionPlan, int, datetime]]:
+        """
+        Lista planes PENDING_VET con conteo de condiciones médicas y fecha de creación.
+
+        Retorna tuplas (plan, conditions_count, created_at) para el dashboard del vet.
+        Hace JOIN con PetModel y desencripta medical_conditions_enc para contar condiciones.
+        Orden: más antiguo primero (prioridad de atención).
+        """
+        result = await self._session.execute(
+            select(NutritionPlanModel, PetModel).join(
+                PetModel, NutritionPlanModel.pet_id == PetModel.id
+            ).where(
+                NutritionPlanModel.status == "PENDING_VET"
+            ).order_by(NutritionPlanModel.created_at.asc())
+            .limit(limit).offset(offset)
+        )
+        rows = result.all()
+        enc = FernetEncryptor()
+        plans_with_info: list[tuple[NutritionPlan, int, datetime]] = []
+        for plan_row, pet_row in rows:
+            conditions_raw = (
+                enc.decrypt(pet_row.medical_conditions_enc)
+                if pet_row.medical_conditions_enc
+                else []
+            )
+            plans_with_info.append((
+                _to_domain(plan_row),
+                len(conditions_raw),
+                plan_row.created_at,
+            ))
+        return plans_with_info
 
     async def count_active_by_owner(self, owner_id: uuid.UUID) -> int:
         """Cuenta planes ACTIVE o PENDING_VET del owner."""

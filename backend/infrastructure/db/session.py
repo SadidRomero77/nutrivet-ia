@@ -16,7 +16,15 @@ _DATABASE_URL = os.environ.get(
     ),
 )
 
-engine = create_async_engine(_DATABASE_URL, echo=False, pool_pre_ping=True)
+engine = create_async_engine(
+    _DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_size=10,           # Conexiones base en el pool
+    max_overflow=20,        # Conexiones extra bajo carga (total max: 30)
+    pool_timeout=30,        # Segundos esperando una conexión libre antes de error
+    pool_recycle=1800,      # Reciclar conexiones cada 30 min (previene stale connections)
+)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

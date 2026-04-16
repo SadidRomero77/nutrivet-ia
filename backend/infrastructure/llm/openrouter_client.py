@@ -53,7 +53,10 @@ class LLMResponse:
 
 class OpenRouterClient:
     """
-    Cliente async para OpenRouter API.
+    Cliente async para OpenRouter API con connection pool persistente.
+
+    El httpx.AsyncClient se crea una vez y se reutiliza entre requests,
+    evitando el overhead de crear/destruir conexiones TCP por cada llamada.
 
     Uso:
         client = OpenRouterClient()
@@ -72,6 +75,7 @@ class OpenRouterClient:
                 "Agrégala a .env.dev o como variable de entorno."
             )
         self._http_referer = os.environ.get("OPENROUTER_REFERER", "https://nutrivet-ia.com")
+        self._client: httpx.AsyncClient | None = None
 
     async def generate(
         self,
@@ -137,6 +141,31 @@ class OpenRouterClient:
         )
         raise RuntimeError("El servicio de IA no está disponible temporalmente. Intenta de nuevo.")
 
+    def _get_client(self) -> httpx.AsyncClient:
+        """Retorna el httpx.AsyncClient persistente (lazy init)."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=_TIMEOUT_SECONDS,
+                limits=httpx.Limits(
+                    max_connections=20,
+                    max_keepalive_connections=10,
+                    keepalive_expiry=30,
+                ),
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "HTTP-Referer": self._http_referer,
+                    "X-Title": "NutriVet.IA",
+                    "Content-Type": "application/json",
+                },
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """Cierra el pool de conexiones. Llamar al apagar la app."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
     async def _call(
         self,
         model: str,
@@ -146,12 +175,6 @@ class OpenRouterClient:
         max_tokens: int = 4096,
     ) -> LLMResponse:
         """Realiza una llamada HTTP al API de OpenRouter."""
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "HTTP-Referer": self._http_referer,
-            "X-Title": "NutriVet.IA",
-            "Content-Type": "application/json",
-        }
         payload: dict[str, Any] = {
             "model": model,
             "messages": [
@@ -162,10 +185,10 @@ class OpenRouterClient:
             "max_tokens": max_tokens,  # Límite explícito — previene costos descontrolados (OWASP LLM10)
         }
 
+        client = self._get_client()
         start = time.monotonic()
-        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-            resp = await client.post(_OPENROUTER_API_URL, json=payload, headers=headers)
-            resp.raise_for_status()
+        resp = await client.post(_OPENROUTER_API_URL, json=payload)
+        resp.raise_for_status()
 
         latency_ms = int((time.monotonic() - start) * 1000)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Optional
 
 from backend.domain.aggregates.nutrition_plan import NutritionPlan
@@ -30,12 +31,35 @@ class IPlanRepository(ABC):
         """Retorna el plan ACTIVE o PENDING_VET actual de la mascota, si existe."""
 
     @abstractmethod
-    async def list_by_owner(self, owner_id: uuid.UUID) -> list[NutritionPlan]:
-        """Lista todos los planes (activos y archivados) del owner."""
+    async def list_by_owner(
+        self,
+        owner_id: uuid.UUID,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[NutritionPlan]:
+        """Lista planes del owner, más reciente primero. Soporta paginación."""
 
     @abstractmethod
-    async def list_pending_vet(self) -> list[NutritionPlan]:
-        """Lista todos los planes en estado PENDING_VET (dashboard del vet)."""
+    async def list_pending_vet(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[NutritionPlan]:
+        """Lista planes en estado PENDING_VET ordenados por antigüedad. Soporta paginación."""
+
+    @abstractmethod
+    async def list_pending_vet_with_conditions(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[tuple[NutritionPlan, int, datetime]]:
+        """
+        Lista planes PENDING_VET con conteo de condiciones médicas y fecha de creación.
+
+        Retorna tuplas (plan, conditions_count, created_at) para el dashboard del vet.
+        Requiere JOIN con PetModel y desencriptación de medical_conditions_enc.
+        Orden: más antiguo primero (prioridad de atención).
+        """
 
     @abstractmethod
     async def count_active_by_owner(self, owner_id: uuid.UUID) -> int:

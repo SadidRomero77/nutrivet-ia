@@ -18,7 +18,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ from backend.application.use_cases.plan_generation_use_case import PlanGeneratio
 from backend.domain.aggregates.user_account import UserTier
 from backend.domain.exceptions.domain_errors import DomainError
 from backend.infrastructure.db.session import AsyncSessionLocal
+from backend.infrastructure.workers.job_enqueuer import enqueue_plan_generation
 from backend.infrastructure.workers.plan_generation_worker import PlanGenerationWorker
 from backend.infrastructure.auth.jwt_service import TokenPayload
 from backend.infrastructure.db.agent_trace_repository import PostgreSQLAgentTraceRepository
@@ -91,12 +92,13 @@ async def _notify_vet_if_pending(session: AsyncSession, job_id: uuid.UUID) -> No
     """
     Si el plan recién creado está en PENDING_VET, notifica al vet del pet.
 
-    Busca el vet vinculado al pet via ClaimCode para enviarle la push.
+    Busca el vet vinculado al pet via PetModel.vet_id (asignado al crear ClinicPet
+    o al vincular via ClaimCode).
     """
     try:
         from sqlalchemy import select as _select
         from backend.infrastructure.db.models import (
-            PlanJobModel, NutritionPlanModel, ClaimCodeModel,
+            PlanJobModel, NutritionPlanModel, PetModel,
         )
         from backend.infrastructure.db.device_token_repository import PostgreSQLDeviceTokenRepository
 
@@ -112,22 +114,19 @@ async def _notify_vet_if_pending(session: AsyncSession, job_id: uuid.UUID) -> No
             _select(NutritionPlanModel).where(NutritionPlanModel.id == job.plan_id)
         )
         plan = plan_q.scalar_one_or_none()
-        if plan is None or plan.status != "pending_vet":
+        if plan is None or plan.status != "PENDING_VET":
             return
 
-        # Buscar vet vinculado al pet via ClaimCode
-        claim_q = await session.execute(
-            _select(ClaimCodeModel).where(
-                ClaimCodeModel.pet_id == plan.pet_id,
-                ClaimCodeModel.used.is_(True),
-            ).order_by(ClaimCodeModel.created_at.desc()).limit(1)
+        # Buscar vet vinculado al pet directamente via PetModel.vet_id
+        pet_q = await session.execute(
+            _select(PetModel.vet_id).where(PetModel.id == plan.pet_id)
         )
-        claim = claim_q.scalar_one_or_none()
-        if claim is None or claim.vet_id is None:
+        vet_id = pet_q.scalar_one_or_none()
+        if vet_id is None:
             return
 
         token_repo = PostgreSQLDeviceTokenRepository(session)
-        tokens = await token_repo.get_tokens_for_user(claim.vet_id)
+        tokens = await token_repo.get_tokens_for_user(vet_id)
         if tokens:
             await send_push_to_tokens(
                 tokens=tokens,
@@ -437,11 +436,20 @@ async def generate_plan(
             modality=body.modality,
             requester_vet_id=user.user_id if is_vet else None,
         )
-        # Commit explícito ANTES de disparar background task para evitar
-        # condición de carrera: el worker crea su propia sesión y necesita
-        # que el job ya esté persistido en DB.
+        # Commit explícito ANTES de disparar el worker para evitar
+        # condición de carrera: el worker (ARQ o BackgroundTask) crea su
+        # propia sesión y necesita que el job ya esté persistido en DB.
         await session.commit()
-        background_tasks.add_task(_run_worker_background, job_id, user.tier)
+
+        # Intentar encolar en ARQ (Redis). Si Redis no está disponible,
+        # fallback a BackgroundTasks de FastAPI (in-process).
+        enqueued = await enqueue_plan_generation(
+            job_id=job_id,
+            user_tier=user.tier.value,
+        )
+        if not enqueued:
+            background_tasks.add_task(_run_worker_background, job_id, user.tier)
+
         return PlanJobResponse(job_id=job_id, status="QUEUED")
     except DomainError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
@@ -464,12 +472,14 @@ async def get_job_status(
 
 @router.get("/v1/plans", response_model=list[PlanSummaryResponse])
 async def list_plans(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(get_current_user),
 ) -> list[PlanSummaryResponse]:
-    """Lista todos los planes del usuario autenticado (owner o vet con pacientes clínicos)."""
+    """Lista planes del usuario autenticado, más reciente primero."""
     plan_repo = PostgreSQLPlanRepository(session)
-    plans = await plan_repo.list_by_owner(user.user_id)
+    plans = await plan_repo.list_by_owner(user.user_id, limit=limit, offset=offset)
     return [_plan_to_summary(p) for p in plans]
 
 
@@ -605,33 +615,18 @@ async def request_substitution(
 
 @vet_router.get("/v1/vet/plans/pending", response_model=list[PlanSummaryResponse])
 async def list_pending_plans(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(require_role("vet")),
 ) -> list[PlanSummaryResponse]:
     """Lista planes PENDING_VET para el dashboard del vet, ordenados por antigüedad."""
-    from sqlalchemy import select as sa_select
-    from backend.infrastructure.db.models import NutritionPlanModel, PetModel as PetORM
-
-    result = await session.execute(
-        sa_select(NutritionPlanModel, PetORM).join(
-            PetORM, NutritionPlanModel.pet_id == PetORM.id
-        ).where(
-            NutritionPlanModel.status == "PENDING_VET"
-        ).order_by(NutritionPlanModel.created_at.asc())
-    )
-    rows = result.all()
-
-    from backend.infrastructure.db.plan_repository import _to_domain
-    summaries = []
-    for plan_row, pet_row in rows:
-        plan = _to_domain(plan_row)
-        conditions_count = len(pet_row.medical_conditions or [])
-        summaries.append(_plan_to_summary(
-            plan,
-            conditions_count=conditions_count,
-            created_at=plan_row.created_at,
-        ))
-    return summaries
+    plan_repo = PostgreSQLPlanRepository(session)
+    rows = await plan_repo.list_pending_vet_with_conditions(limit=limit, offset=offset)
+    return [
+        _plan_to_summary(plan, conditions_count=count, created_at=created_at)
+        for plan, count, created_at in rows
+    ]
 
 
 def _vet_pet_to_response(pet: Any) -> PetResponse:
@@ -658,6 +653,8 @@ def _vet_pet_to_response(pet: Any) -> PetResponse:
 
 @vet_router.get("/v1/vet/patients", response_model=list[PetResponse])
 async def list_vet_patients(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
     user: TokenPayload = Depends(require_role("vet")),
 ) -> list[PetResponse]:
@@ -670,12 +667,12 @@ async def list_vet_patients(
     from backend.infrastructure.db.models import PetModel as PetORM
     pet_repo = PostgreSQLPetRepository(session)
 
-    # Query 1: todos los pacientes del vet
+    # Query 1: pacientes del vet con paginación
     stmt = select(PetORM).where(
         PetORM.vet_id == user.user_id,
         PetORM.is_clinic_pet.is_(True),
         PetORM.is_active.is_(True),
-    )
+    ).limit(limit).offset(offset)
     result = await session.execute(stmt)
     models = result.scalars().all()
 

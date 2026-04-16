@@ -124,6 +124,10 @@ class JWTService:
         """
         Genera un token JWT de un solo uso para reset de contraseña.
 
+        Single-use: incluye `iat` (issued at). Al verificar, se compara con
+        `updated_at` del usuario — si el password fue cambiado después del `iat`,
+        el token queda invalidado sin necesidad de tabla extra.
+
         Args:
             user_id: ID del usuario que solicita el reset.
             expires_seconds: TTL del token (default 15 minutos).
@@ -131,15 +135,16 @@ class JWTService:
         Returns:
             Token JWT firmado con HS256.
         """
-        exp = time.time() + expires_seconds
+        now = time.time()
         payload = {
             "sub": str(user_id),
             "purpose": "password_reset",
-            "exp": exp,
+            "iat": now,
+            "exp": now + expires_seconds,
         }
         return jwt.encode(payload, self._secret_key, algorithm=self._algorithm)
 
-    def verify_reset_token(self, token: str) -> uuid.UUID:
+    def verify_reset_token(self, token: str) -> tuple[uuid.UUID, float]:
         """
         Decodifica y valida un token de reset de contraseña.
 
@@ -147,7 +152,9 @@ class JWTService:
             token: Token JWT de reset.
 
         Returns:
-            UUID del usuario si el token es válido.
+            Tupla (user_id, issued_at_timestamp). El caller debe verificar que
+            el usuario no haya cambiado su password después de `issued_at`
+            para garantizar single-use.
 
         Raises:
             DomainError: Si el token es inválido, expirado o no es de reset.
@@ -162,4 +169,5 @@ class JWTService:
         if data.get("purpose") != "password_reset":
             raise DomainError("El token no es válido para este propósito.")
 
-        return uuid.UUID(data["sub"])
+        issued_at = data.get("iat", 0.0)
+        return uuid.UUID(data["sub"]), float(issued_at)

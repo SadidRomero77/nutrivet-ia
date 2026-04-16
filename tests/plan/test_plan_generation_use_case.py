@@ -172,14 +172,30 @@ class TestPlanGenerationEnqueue:
     ) -> None:
         """get_job retorna status del job dado el job_id."""
         job_id = uuid.uuid4()
+        requester_id = uuid.uuid4()
         job_stub = MagicMock()
         job_stub.job_id = job_id
+        job_stub.owner_id = requester_id  # mismo requester — acceso permitido
         job_stub.status = "QUEUED"
         job_stub.plan_id = None
         mock_job_repo.find_by_id.return_value = job_stub
 
-        result = await use_case.get_job(job_id=job_id, requester_id=uuid.uuid4())
+        result = await use_case.get_job(job_id=job_id, requester_id=requester_id)
         assert result["status"] == "QUEUED"
+
+    @pytest.mark.asyncio
+    async def test_get_job_acceso_denegado_para_otro_usuario(
+        self, use_case: PlanGenerationUseCase, mock_job_repo: AsyncMock
+    ) -> None:
+        """get_job lanza DomainError si el requester no es el owner del job."""
+        job_id = uuid.uuid4()
+        job_stub = MagicMock()
+        job_stub.job_id = job_id
+        job_stub.owner_id = uuid.uuid4()  # owner distinto al requester
+        mock_job_repo.find_by_id.return_value = job_stub
+
+        with pytest.raises(DomainError, match="(?i)acceso denegado"):
+            await use_case.get_job(job_id=job_id, requester_id=uuid.uuid4())
 
     @pytest.mark.asyncio
     async def test_get_job_no_encontrado_falla(

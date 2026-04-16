@@ -135,6 +135,9 @@ class PlanGenerationUseCase:
         if job is None:
             raise DomainError(f"Job con ID '{job_id}' no encontrado.")
 
+        if job.owner_id != requester_id:
+            raise DomainError("Acceso denegado: no eres el propietario de este job.")
+
         result: dict[str, Any] = {
             "job_id": job.job_id,
             "status": job.status.value if isinstance(job.status, PlanJobStatus) else job.status,

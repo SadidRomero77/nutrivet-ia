@@ -1,0 +1,119 @@
+# docker-compose.prod.yml — NutriVet.IA producción
+#
+# Servicios:
+#   app     — FastAPI + Uvicorn (2 workers)
+#   worker  — ARQ worker para generación de planes async
+#   db      — PostgreSQL 16
+#   redis   — Redis 7 (ARQ queue + rate limiter)
+#
+# Uso:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# En Coolify: se importa directamente este archivo como "Docker Compose" resource.
+# Variables de entorno se configuran en Coolify dashboard (nunca en este archivo).
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nutrivet_app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL_ASYNC=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      - DATABASE_URL=postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - FERNET_KEY=${FERNET_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - LOG_FORMAT=json
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-nutrivet-prod}
+      - PAYU_MERCHANT_ID=${PAYU_MERCHANT_ID:-}
+      - PAYU_API_KEY=${PAYU_API_KEY:-}
+      - PAYU_API_LOGIN=${PAYU_API_LOGIN:-}
+      - PAYU_ACCOUNT_ID=${PAYU_ACCOUNT_ID:-}
+      - PAYU_ENV=${PAYU_ENV:-sandbox}
+      - APP_BASE_URL=${APP_BASE_URL:-https://nutrivet.app}
+      - FCM_SERVICE_ACCOUNT_JSON=${FCM_SERVICE_ACCOUNT_JSON:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - MVP_FREEMIUM_DISABLED=${MVP_FREEMIUM_DISABLED:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nutrivet_worker
+    restart: unless-stopped
+    command: ["python", "-m", "backend.infrastructure.workers.arq_app"]
+    environment:
+      - DATABASE_URL_ASYNC=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      - DATABASE_URL=postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      - REDIS_URL=redis://redis:6379/0
+      - FERNET_KEY=${FERNET_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-nutrivet-prod}
+      - LOG_FORMAT=json
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    container_name: nutrivet_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-nutrivet}
+      POSTGRES_USER: ${DB_USER:-nutrivet}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - nutrivet_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-nutrivet} -d ${DB_NAME:-nutrivet}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # No exponer puerto 5432 externamente en producción
+    # Solo accesible via red interna de Docker
+
+  redis:
+    image: redis:7-alpine
+    container_name: nutrivet_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - nutrivet_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # No exponer puerto 6379 externamente en producción
+
+volumes:
+  nutrivet_pg_data:
+  nutrivet_redis_data:

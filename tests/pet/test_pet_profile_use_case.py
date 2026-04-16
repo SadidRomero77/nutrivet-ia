@@ -110,12 +110,18 @@ class TestCrearMascota:
     ) -> None:
         """Free tier: ya tiene 1 mascota → DomainError al intentar crear otra."""
         mock_pet_repo.count_by_owner.return_value = 1
-        with pytest.raises(DomainError, match="(?i)límite"):
-            await use_case.create_pet(
-                owner_id=uuid.uuid4(),
-                pet_data=_dog_data(),
-                user_tier=UserTier.FREE,
-            )
+        import backend.application.use_cases.pet_profile_use_case as _mod
+        original = _mod.MVP_FREEMIUM_DISABLED
+        _mod.MVP_FREEMIUM_DISABLED = False
+        try:
+            with pytest.raises(DomainError, match="(?i)límite"):
+                await use_case.create_pet(
+                    owner_id=uuid.uuid4(),
+                    pet_data=_dog_data(),
+                    user_tier=UserTier.FREE,
+                )
+        finally:
+            _mod.MVP_FREEMIUM_DISABLED = original
 
     @pytest.mark.asyncio
     async def test_premium_puede_crear_hasta_3_mascotas(

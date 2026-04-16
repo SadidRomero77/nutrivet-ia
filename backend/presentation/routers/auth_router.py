@@ -67,7 +67,7 @@ def _build_use_case(
     status_code=status.HTTP_201_CREATED,
     summary="Registrar nuevo usuario",
 )
-@_limiter.limit("20/minute")  # Límite generoso para testing — ajustar a 5/minute en producción
+@_limiter.limit("5/minute")  # Previene registro masivo automatizado
 async def register(
     request: Request,
     body: RegisterRequest,
@@ -448,7 +448,7 @@ async def reset_password(
     El token es válido por 15 minutos y de un solo uso (TTL via JWT exp).
     """
     try:
-        user_id = jwt_service.verify_reset_token(body.token)
+        user_id, issued_at = jwt_service.verify_reset_token(body.token)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -462,6 +462,16 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El enlace de recuperación es inválido o ha expirado.",
         )
+
+    # Single-use: si el password fue cambiado después de que se emitió el token,
+    # el token ya fue usado (o el password fue cambiado por otra vía).
+    if user_obj.updated_at is not None:
+        user_updated_ts = user_obj.updated_at.timestamp()
+        if user_updated_ts > issued_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El enlace de recuperación ya fue utilizado o ha expirado.",
+            )
 
     pw_service = PasswordService()
     user_obj.password_hash = pw_service.hash_password(body.new_password)

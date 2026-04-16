@@ -105,6 +105,7 @@ def verify_webhook_signature(
     value: str,
     currency: str,
     state_pol: str,
+    sign: str,
 ) -> bool:
     """
     Verifica la firma del webhook de PayU (confirmación de pago).
@@ -119,13 +120,14 @@ def verify_webhook_signature(
         value: Monto formateado (e.g., "29900.00").
         currency: Moneda (e.g., "COP").
         state_pol: Estado del pago (4=aprobado, 6=declinado, 104=error).
+        sign: Firma MD5 enviada por PayU en el campo `sign` del payload.
 
     Returns:
-        True si la firma es válida.
+        True si la firma calculada coincide con la recibida de PayU.
     """
     raw = f"{api_key}~{merchant_id}~{reference_sale}~{value}~{currency}~{state_pol}"
     expected = hashlib.md5(raw.encode()).hexdigest()
-    return expected == reference_sale  # PayU envía sign como parte del payload
+    return expected == sign
 
 
 async def create_payment_link(
