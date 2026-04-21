@@ -4,6 +4,7 @@ Sin mocks. Requiere PostgreSQL de test corriendo.
 """
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -18,8 +19,9 @@ from backend.infrastructure.db.models import RefreshTokenModel, UserModel  # noq
 from backend.infrastructure.db.token_repository import PostgreSQLTokenRepository
 from backend.infrastructure.db.user_repository import PostgreSQLUserRepository
 
-_TEST_DB_URL = (
-    "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev"
+_TEST_DB_URL = os.environ.get(
+    "DATABASE_URL_ASYNC",
+    "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev",
 )
 
 # ---------------------------------------------------------------------------

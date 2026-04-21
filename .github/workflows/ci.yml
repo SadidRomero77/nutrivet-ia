@@ -11,13 +11,28 @@ jobs:
     name: Tests + Cobertura + SAST
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nutrivet
+          POSTGRES_PASSWORD: nutrivet_ci_pass
+          POSTGRES_DB: nutrivet_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U nutrivet"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     env:
-      # Variables mínimas para que los tests corran sin DB real
       JWT_SECRET_KEY: ci_test_secret_key_not_for_production
       JWT_ALGORITHM: HS256
       FERNET_KEY: "dGVzdF9rZXlfZm9yX2NpX29ubHlfMzJfYnl0ZXNfbG9uZw=="
       OPENROUTER_API_KEY: "sk-or-fake-ci-key"
-      DATABASE_URL_ASYNC: "postgresql+asyncpg://localhost:5432/nutrivet_test"
+      DATABASE_URL: "postgresql+psycopg2://nutrivet:nutrivet_ci_pass@localhost:5432/nutrivet_test"
+      DATABASE_URL_ASYNC: "postgresql+asyncpg://nutrivet:nutrivet_ci_pass@localhost:5432/nutrivet_test"
       MVP_FREEMIUM_DISABLED: "true"
 
     steps:

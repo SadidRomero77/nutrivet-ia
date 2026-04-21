@@ -20,8 +20,10 @@ from backend.infrastructure.db.session import get_db_session
 from backend.presentation.middleware.auth_middleware import get_jwt_service
 from backend.presentation.routers.auth_router import router
 
-_TEST_DB_URL = (
-    "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev"
+import os
+_TEST_DB_URL = os.environ.get(
+    "DATABASE_URL_ASYNC",
+    "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev",
 )
 _TEST_SECRET = "test-router-secret-abc"
 _test_jwt = JWTService(secret_key=_TEST_SECRET, algorithm="HS256")

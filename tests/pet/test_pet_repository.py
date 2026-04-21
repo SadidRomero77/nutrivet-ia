@@ -21,7 +21,10 @@ from backend.infrastructure.db.claim_code_repository import PostgreSQLClaimCodeR
 from backend.infrastructure.db.pet_repository import PostgreSQLPetRepository
 from backend.infrastructure.db.weight_repository import PostgreSQLWeightRepository
 
-_TEST_DB_URL = "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev"
+_TEST_DB_URL = os.environ.get(
+    "DATABASE_URL_ASYNC",
+    "postgresql+asyncpg://nutrivet:nutrivet_dev_pass@localhost:5432/nutrivet_dev",
+)
 
 # Clave Fernet de test
 os.environ.setdefault(
