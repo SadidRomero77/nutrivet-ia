@@ -95,7 +95,7 @@ def _generate_signature(
     Formato: MD5(apiKey~merchantId~referenceCode~amount~currency)
     """
     raw = f"{api_key}~{merchant_id}~{reference_code}~{amount:.2f}~{currency}"
-    return hashlib.md5(raw.encode()).hexdigest()
+    return hashlib.md5(raw.encode()).hexdigest()  # nosec B324 — PayU requiere MD5
 
 
 def verify_webhook_signature(
@@ -126,7 +126,7 @@ def verify_webhook_signature(
         True si la firma calculada coincide con la recibida de PayU.
     """
     raw = f"{api_key}~{merchant_id}~{reference_sale}~{value}~{currency}~{state_pol}"
-    expected = hashlib.md5(raw.encode()).hexdigest()
+    expected = hashlib.md5(raw.encode()).hexdigest()  # nosec B324 — PayU requiere MD5
     return expected == sign
 
 

@@ -194,7 +194,7 @@ async def payu_webhook(request: Request) -> dict:
     # Verificar firma PayU
     config = PayUConfig.from_env()
     if config.is_configured:
-        expected_sign = hashlib.md5(
+        expected_sign = hashlib.md5(  # nosec B324 — PayU requiere MD5
             f"{config.api_key}~{merchant_id}~{reference_sale}~{value}~{currency}~{state_pol}".encode()
         ).hexdigest()
         if expected_sign != sign:
