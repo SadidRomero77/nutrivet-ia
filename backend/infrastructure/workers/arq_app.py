@@ -67,6 +67,84 @@ def _parse_redis_settings() -> RedisSettings:
     return RedisSettings(host=host, port=port, database=database, password=password)
 
 
+async def _send_post_generation_notifications(job_uuid: uuid.UUID) -> None:
+    """
+    Envía push notifications tras la generación de un plan.
+
+    - Owner: notifica que su plan está listo (READY) o falló (FAILED).
+    - Vet: si el plan quedó PENDING_VET, notifica al vet vinculado.
+
+    Fire-and-forget: errores se loguean pero nunca bloquean el job.
+    """
+    from backend.infrastructure.db.session import AsyncSessionLocal
+    from backend.infrastructure.db.models import PlanJobModel, NutritionPlanModel, PetModel
+    from backend.infrastructure.db.device_token_repository import PostgreSQLDeviceTokenRepository
+    from backend.infrastructure.push.fcm_client import PushNotification, send_push_to_tokens
+    from sqlalchemy import select
+
+    try:
+        async with AsyncSessionLocal() as session:
+            # Cargar el job
+            job_q = await session.execute(
+                select(PlanJobModel).where(PlanJobModel.id == job_uuid)
+            )
+            job = job_q.scalar_one_or_none()
+            if job is None:
+                return
+
+            token_repo = PostgreSQLDeviceTokenRepository(session)
+
+            # Notificar al owner del resultado
+            if job.status == "READY" and job.plan_id is not None:
+                owner_tokens = await token_repo.get_tokens_for_user(job.owner_id)
+                if owner_tokens:
+                    await send_push_to_tokens(
+                        tokens=owner_tokens,
+                        notification=PushNotification(
+                            title="¡Tu plan nutricional está listo!",
+                            body="Ya puedes ver el plan personalizado de tu mascota.",
+                            data={"event": "plan_ready", "plan_id": str(job.plan_id)},
+                        ),
+                    )
+
+                # Si el plan es PENDING_VET, notificar al vet vinculado
+                plan_q = await session.execute(
+                    select(NutritionPlanModel.status, NutritionPlanModel.pet_id)
+                    .where(NutritionPlanModel.id == job.plan_id)
+                )
+                plan_row = plan_q.one_or_none()
+                if plan_row is not None and plan_row.status == "PENDING_VET":
+                    pet_q = await session.execute(
+                        select(PetModel.vet_id).where(PetModel.id == plan_row.pet_id)
+                    )
+                    vet_id = pet_q.scalar_one_or_none()
+                    if vet_id is not None:
+                        vet_tokens = await token_repo.get_tokens_for_user(vet_id)
+                        if vet_tokens:
+                            await send_push_to_tokens(
+                                tokens=vet_tokens,
+                                notification=PushNotification(
+                                    title="Nuevo plan para revisar",
+                                    body="Un propietario generó un plan con condición médica. Requiere tu aprobación.",
+                                    data={"event": "plan_pending_vet", "plan_id": str(job.plan_id)},
+                                ),
+                            )
+
+            elif job.status == "FAILED":
+                owner_tokens = await token_repo.get_tokens_for_user(job.owner_id)
+                if owner_tokens:
+                    await send_push_to_tokens(
+                        tokens=owner_tokens,
+                        notification=PushNotification(
+                            title="Error al generar tu plan",
+                            body="Hubo un problema generando el plan. Por favor intenta de nuevo.",
+                            data={"event": "plan_failed", "job_id": str(job_uuid)},
+                        ),
+                    )
+    except Exception:
+        logger.exception("Error enviando push notifications post-generación job=%s", job_uuid)
+
+
 async def generate_plan(ctx: dict, job_id: str, user_tier: str) -> str:
     """
     ARQ task: genera un plan nutricional completo.
@@ -102,6 +180,10 @@ async def generate_plan(ctx: dict, job_id: str, user_tier: str) -> str:
             await worker.execute(job_id=job_uuid, user_tier=tier)
             await session.commit()
             logger.info("arq_generate_plan completado job=%s", job_id)
+
+            # Push notifications post-generación (fire-and-forget)
+            await _send_post_generation_notifications(job_uuid)
+
             return "ok"
         except Exception as exc:
             await session.rollback()
@@ -118,6 +200,9 @@ async def generate_plan(ctx: dict, job_id: str, user_tier: str) -> str:
                         await err_session.commit()
                 except Exception:
                     logger.exception("No se pudo marcar FAILED job=%s en fallback", job_id)
+
+            # Notificar al owner del fallo
+            await _send_post_generation_notifications(job_uuid)
 
             return f"error: {exc}"
 

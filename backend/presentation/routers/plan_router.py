@@ -88,6 +88,54 @@ async def _push_to_user(user_id: uuid.UUID, notification: PushNotification) -> N
         logger.exception("Error enviando push notification a user=%s", user_id)
 
 
+async def _notify_owner_plan_ready(job_id: uuid.UUID) -> None:
+    """Notifica al owner que su plan terminó de generarse (READY)."""
+    try:
+        from backend.infrastructure.db.models import PlanJobModel
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import select as _select
+            job_q = await session.execute(
+                _select(PlanJobModel).where(PlanJobModel.id == job_id)
+            )
+            job = job_q.scalar_one_or_none()
+            if job is None or job.status != "READY" or job.plan_id is None:
+                return
+            await _push_to_user(
+                job.owner_id,
+                PushNotification(
+                    title="¡Tu plan nutricional está listo!",
+                    body="Ya puedes ver el plan personalizado de tu mascota.",
+                    data={"event": "plan_ready", "plan_id": str(job.plan_id)},
+                ),
+            )
+    except Exception:
+        logger.exception("Error en _notify_owner_plan_ready job=%s", job_id)
+
+
+async def _notify_owner_plan_failed(job_id: uuid.UUID) -> None:
+    """Notifica al owner que la generación de su plan falló."""
+    try:
+        from backend.infrastructure.db.models import PlanJobModel
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import select as _select
+            job_q = await session.execute(
+                _select(PlanJobModel).where(PlanJobModel.id == job_id)
+            )
+            job = job_q.scalar_one_or_none()
+            if job is None or job.status != "FAILED":
+                return
+            await _push_to_user(
+                job.owner_id,
+                PushNotification(
+                    title="Error al generar tu plan",
+                    body="Hubo un problema generando el plan. Por favor intenta de nuevo.",
+                    data={"event": "plan_failed", "job_id": str(job_id)},
+                ),
+            )
+    except Exception:
+        logger.exception("Error en _notify_owner_plan_failed job=%s", job_id)
+
+
 async def _notify_vet_if_pending(session: AsyncSession, job_id: uuid.UUID) -> None:
     """
     Si el plan recién creado está en PENDING_VET, notifica al vet del pet.
@@ -187,7 +235,8 @@ async def _run_worker_background(job_id: uuid.UUID, user_tier: UserTier) -> None
             await session.commit()
             logger.info("plan_generation_worker completado job=%s", job_id)
 
-            # Push notification: notificar al vet si el plan quedó PENDING_VET
+            # Push notifications post-generación
+            await _notify_owner_plan_ready(job_id=job_id)
             await _notify_vet_if_pending(session=session, job_id=job_id)
         except Exception as exc:
             worker_exc = exc
@@ -205,6 +254,8 @@ async def _run_worker_background(job_id: uuid.UUID, user_tier: UserTier) -> None
                     await err_job_repo.update(err_job)
                     await err_session.commit()
                     logger.info("job=%s marcado FAILED en sesión de fallback", job_id)
+                    # Notificar al owner del fallo
+                    await _notify_owner_plan_failed(job_id=job_id)
             except Exception:
                 logger.exception("No se pudo marcar FAILED job=%s en fallback", job_id)
 
